@@ -2,7 +2,7 @@ from ..inference.oai_request_client import ParallelResponsesClient, PRICING
 from ..utils.constants import categorize_prompt, conceptual_rephrase_prompt, abstract_questions_prompt, example_abstract_passage, example_abstract_questions, decomposed_prompt_restrictive_v2
 from collections import Counter
 from datasets import Dataset
-from ..inference.datastore_reasoning import DatastoreReasoning
+from ..inference.vllm_wrapper import VLLMWrapper
 
 # given a pre-processed list of passages with 'text' column, generate abstract questions for each passage.
 def passages_to_questions(passages, model="gemini-2.5-pro"):
@@ -55,14 +55,18 @@ def categorize_filter_setdata(querydata, model="gemini-2.5-flash", limit=30000):
 
 def possearch_singlestage(prior_positives, queries, model):
 
-    if model in PRICING.keys():
+    use_oai = model in PRICING.keys()
+    if use_oai:
+        print(f"Using OAI model: {model}")
         # use oai model
         oai_client = ParallelResponsesClient(max_concurrent=100)
         proc_fct = lambda x: oai_client.run(model=model, prompts=x)
     else:
+        print(f"Using VLLM model: {model}")
         # use vllm model, TODO maybe don't need datastore reasoning
-        datastore_reason = DatastoreReasoning(vllm_model=model)
-
+        vllm_wrapper = VLLMWrapper(model)
+        proc_fct = lambda x: vllm_wrapper.generate(x)
+        
     # get a list of all the queries in one go
     pos_lens = [len(pos) for pos in prior_positives]
     queries_flat = []
@@ -74,23 +78,30 @@ def possearch_singlestage(prior_positives, queries, model):
 
     responses = proc_fct(queries_all)
     responses = ["yes" in response['response'].lower().strip() for response in responses]
-    cost = 0 if model not in PRICING.keys() else oai_client.total_cost
+    cost = 0 if use_oai else vllm_wrapper.total_cost
+    print(f"Total cost: {cost}")
     responses_grouped = []
     ind = 0
     # for each stage, return list of passages relevant to the query
     for i in range(len(pos_lens)):
         responses_grouped.append([prior_positives[i][j] for j in range(len(prior_positives[i])) if responses[ind+j]])
         ind += pos_lens[i]
+    if not use_oai:
+        vllm_wrapper.delete_model()
     return responses_grouped, cost
 
 def hierarchical_positive_search(passages, questions, models=["Qwen/Qwen3-4B", "gemini-2.5-pro", "gemini-2.5-flash"]):
-    # loop through each stage, use positives from previous stage as queries for next stage
-    previouspasses = [passages for _ in questions]
+    # initialize loop, in gutenberg / other custom cases we can also pass in large loops to begin with
+    if type(passages[0]) is not list:
+        print("Using the same passage set for all questions.")
+        previouspasses = [passages for _ in questions]
+    # map passage to index
     pass2ind = {passage: i for i, passage in enumerate(passages)}
     selectresults = {}
     for i in range(len(models)):
         currentpasses, cost = possearch_singlestage(previouspasses, questions, models[i])
         print(f"Stage {i} cost: {cost}")
+        # save to use later
         curinds = [[pass2ind[passage] for passage in currentpasses[j]] for j in range(len(currentpasses))]
         selectresults[models[i]] = {'keep_indices': curinds, 'cost': cost}
         previouspasses = currentpasses
