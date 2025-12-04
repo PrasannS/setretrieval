@@ -1,1 +1,0 @@
-{"eval/steps_per_second":0.505,"eval/runtime":11.8815,"_runtime":225,"_wandb":{"runtime":225},"_step":4,"eval/samples_per_second":251.905,"_timestamp":1.7648246382906318e+09,"eval/dev_cosine_accuracy":0.8970932364463806,"train/epoch":5,"train/global_step":260,"eval/loss":1.3190556764602661}

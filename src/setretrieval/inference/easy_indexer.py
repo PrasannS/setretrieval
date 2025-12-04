@@ -116,7 +116,8 @@ class EasyIndexer:
                 if idx < len(self.documents[index_id]):
                     results.append({
                         'score': distances[j][i],
-                        'index': idx
+                        'index': idx, 
+                        'index_id': index_id
                     })
                     # results.append(self.documents[index_id].iloc[idx])
                     # results[-1]["score"] = distances[j][i]
@@ -125,6 +126,19 @@ class EasyIndexer:
         if len(fullresults) == 1:
             return fullresults[0]
         return fullresults
+
+    def composed_search(self, queries, index_ids, k=10, doembed=True):
+        allres = []
+        for index_id in index_ids:
+            allres.extend(self.search(queries, index_id, k=k, doembed=doembed))
+        # now sort by distance (lower is better?)
+        allres.sort(key=lambda x: x['score'])
+        return allres
+
+    def index_dataset(self, dset_path):
+        # index datasets based on path to a dataset (with a text column)
+        dset = Dataset.load_from_disk(dset_path)
+        self.index_documents(dset["text"], dset_path.replace("/", "_"))
 
     def bm25_search(self, query, index_id, k=10):
         if index_id not in self.indices:

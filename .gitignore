@@ -5,6 +5,10 @@ __pycache__/
 
 *cache/
 
+logs/
+wandb/
+data/
+
 # C extensions
 *.so
 
