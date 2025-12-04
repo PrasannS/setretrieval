@@ -10,11 +10,11 @@ from pylate import evaluation, losses, models, utils
 import os
 
 # dataset should be loaded in first, should have format of [query, positive, negative]
-def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6):
+def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1"):
     """Train set retrieval models."""
 
     # Set the run name for logging and output directory
-    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}"
+    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}"
     output_dir = f"cache/colbert_training/{run_name}"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -46,7 +46,7 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
         per_device_eval_batch_size=mini_batch_size,
         bf16=True,  # Set to True if you have a GPU that supports BF16
         run_name=run_name,  # Will be used in W&B if `wandb` is installed
-        learning_rate=3e-6,
+        learning_rate=learning_rate,
         eval_strategy="epoch",
         lr_scheduler_type="constant",
     )
@@ -66,11 +66,11 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
 
 
 # dataset should be loaded in first, should have format of [query, positive, negative]
-def train_sbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", per_device_batch_size=32, num_train_epochs=3, learning_rate=3e-6):
+def train_sbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", per_device_batch_size=32, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1"):
     """Train single-vector retrieval models."""
 
     # Set the run name for logging and output directory
-    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-sbert"
+    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-sbert-{dsetname}"
     output_dir = f"cache/sbert_training/{run_name}"
     os.makedirs(output_dir, exist_ok=True)
 

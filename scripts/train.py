@@ -17,13 +17,14 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=3e-6)
     parser.add_argument("--model_name", type=str, default="google-bert/bert-base-uncased")
     parser.add_argument("--traintype", type=str, default="colbert")
+    parser.add_argument("--dataset", type=str, default="gemini_datav1")
     args = parser.parse_args()
 
-    dataset = DatasetDict.load_from_disk("data/colbert_training/gemini_datav1")
+    dataset = DatasetDict.load_from_disk(f"data/colbert_training/{args.dataset}")
     traindata = dataset["train"]
     evaldata = dataset["test"]
 
     if args.traintype == "colbert":
-        colbert_train.train_colbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name)
+        colbert_train.train_colbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset)
     elif args.traintype == "sbert":
-        colbert_train.train_sbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name)
+        colbert_train.train_sbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset)
