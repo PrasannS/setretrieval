@@ -3,17 +3,18 @@ from sentence_transformers import SentenceTransformer
 from datasets import Dataset
 import numpy as np
 from tqdm import tqdm
-import argparse
 import os
 from typing import *  # pylint: disable=wildcard-import,unused-wildcard-import
-import torch
-from multiprocessing import Pool, cpu_count
-import time
 import faiss
-import pandas as pd
-from rank_bm25 import BM25Okapi
 from pylate import indexes, models, retrieve
 from ..utils.utils import pickdump, pickload
+import bm25s
+import Stemmer
+from concurrent.futures import ThreadPoolExecutor
+import torch
+import numpy as np
+import random
+from vllm import LLM
 
 
 class EasyIndexerBase:
@@ -45,30 +46,35 @@ class EasyIndexerBase:
     def index_dataset(self, dset_path):
         # index datasets based on path to a dataset (with a text column)
         dset = Dataset.load_from_disk(dset_path)
-        self.index_documents(dset["text"], dset_path.replace("/", "_"))
-        
+        self.index_documents(list(dset["text"]), dset_path.replace("/", "_"))
+        return dset_path.replace("/", "_")
 
 # Indexer for single vector retrieval
 class SingleEasyIndexer(EasyIndexerBase):
-    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='cache/single_indices', num_gpus=4):
+    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='cache/single_indices', num_gpus=8):
         super().__init__(model_name, index_base_path, num_gpus)
-        
+
     # By not loading model initially, we can allow inference without GPU (speedup in certain cases)
     def load_model(self):
         if self.model is None:
             print("Loading vanilla sentence transformer model")
-            self.model = SentenceTransformer(self.model_name, device='cuda:0' if self.available_gpus > 0 else 'cpu', trust_remote_code=True)
-
+            self.model = LLM(model=self.model_name, tensor_parallel_size=torch.cuda.device_count(), runner="pooling")
+            # self.model = SentenceTransformer(self.model_name, device='cuda:0' if self.available_gpus > 0 else 'cpu', trust_remote_code=True)
+            self.toker = self.model.get_tokenizer()
     def index_exists(self, index_id):
         return os.path.exists(os.path.join(self.index_base_path, f"{index_id}.faiss"))
 
     # given documents and an id, either load or search index
-    def index_documents(self, documents, index_id, emb_bsize=8, pre_embeds=None):
+    def index_documents(self, documents, index_id, emb_bsize=64, pre_embeds=None):
         os.makedirs(self.index_base_path, exist_ok=True)
-        if index_id in self.indices:
+        if self.index_exists(index_id):
             print(f"Index {index_id} already exists")
             return
         assert documents is not None
+        
+        dlim = 5000
+        print(f"Truncating {sum([len(d)>dlim for d in documents])} documents to {dlim} characters")
+        documents = [d[:dlim] if len(d) > dlim else d for d in documents]
 
         if pre_embeds is None:
             embeds = self.embed_with_multi_gpu(documents, batch_size=emb_bsize)
@@ -80,35 +86,47 @@ class SingleEasyIndexer(EasyIndexerBase):
         index = faiss.IndexFlatL2(embeds.shape[1])
         index.add(embeds)
         faiss.write_index(index, os.path.join(self.index_base_path, f"{index_id}.faiss"))
-        self.documents[index_id] = pd.DataFrame(documents, columns=["text"])
-        self.documents[index_id].to_csv(os.path.join(self.index_base_path, f"{index_id}.csv"), index=False) # save documents
+        self.documents[index_id] = Dataset.from_dict({"text": documents})
+        self.documents[index_id].save_to_disk(os.path.join(self.index_base_path, f"{index_id}")) # save documents
         self.indices[index_id] = index
         print(f"Indexed {len(self.documents[index_id])} documents for index {index_id}")
 
-    def embed_with_multi_gpu(self, documents, qtype="document", batch_size=8):
+    def embed_with_multi_gpu(self, documents, qtype="document", batch_size=64):
 
         self.load_model()
-        assert qtype in ['document', 'query'] and type(documents) == list
+        assert qtype in ['document', 'query'] and (type(documents) == list)
 
-        # This handles GPU distribution automatically
-        if len(documents) > self.available_gpus:
-            pool = self.model.start_multi_process_pool(target_devices=[f'cuda:{i}' for i in range(self.available_gpus)])
-        else: 
-            pool = None
+        if "google-bert" in self.model_name:
+            # tokenize / detokenize to get things less than 510 tokens long
+            docs = [self.toker.encode(doc) for doc in documents]
+            docs = [self.toker.decode(doc[:505], skip_special_tokens=True) for doc in docs]
+            documents = docs
+            breakpoint()
+        
+        # # This handles GPU distribution automatically
+        # if len(documents) > self.available_gpus:
+        #     pool = self.model.start_multi_process_pool(target_devices=[f'cuda:{i}' for i in range(self.available_gpus)])
+        # else:
+        #     pool = None
         
         if self.model_name == "nomic-ai/nomic-embed-text-v1":
             # preprocess documents with prefix search_document: 
             documents = [f"search_{qtype}: {doc}" for doc in documents]
+        elif "Qwen" in self.model_name and qtype == "query":
+            documents = [f"Instruct: Find documents, both normal and unexpected, that are relevant to the query.\nQuery: {doc}" for doc in documents]
+        embeddings = self.model.embed(documents)
+        # print("Embedding documents, remember to format documents correctly!")
+        # print("EXAMPLE: "+documents[0])
+        # # TODO this should do multi-GPU I think?
+        # if "Qwen" in self.model_name and qtype == "query":
+        #     embeddings = self.model.encode(documents, pool=pool, batch_size=batch_size, show_progress_bar=True, prompt_name="query")
+        # else:
+        #     embeddings = self.model.encode(documents, pool=pool, batch_size=batch_size, show_progress_bar=True)
+        # if pool is not None:
+        #     self.model.stop_multi_process_pool(pool)
+        embeddings = [e.outputs.embedding for e in embeddings]
+        # breakpoint()
         
-        print("Embedding documents, remember to format documents correctly!")
-        print("EXAMPLE: "+documents[0])
-        # TODO this should do multi-GPU I think?
-        if "Qwen" in self.model_name and qtype == "query":
-            embeddings = self.model.encode(documents, pool=pool, batch_size=batch_size, show_progress_bar=True, prompt_name="query")
-        else:
-            embeddings = self.model.encode(documents, pool=pool, batch_size=batch_size, show_progress_bar=True)
-        if pool is not None:
-            self.model.stop_multi_process_pool(pool)
         return embeddings
 
     def try_load_cached(self, index_id):
@@ -116,7 +134,7 @@ class SingleEasyIndexer(EasyIndexerBase):
             if self.index_exists(index_id) == False:
                 raise ValueError(f"Index {index_id} does not exist")
             self.indices[index_id] = faiss.read_index(os.path.join(self.index_base_path, f"{index_id}.faiss"))
-            self.documents[index_id] = pd.read_csv(os.path.join(self.index_base_path, f"{index_id}.csv"))
+            self.documents[index_id] = Dataset.load_from_disk(os.path.join(self.index_base_path, f"{index_id}"))
             print(f"Loaded index {index_id} from cache with {len(self.documents[index_id])} documents")
         
     # given query, return list of dictionaries with document, index, and score for top k
@@ -124,11 +142,10 @@ class SingleEasyIndexer(EasyIndexerBase):
         self.try_load_cached(index_id)
         assert type(queries) == list, "Queries must be a list"
 
-        query_embedding = self.embed_with_multi_gpu(queries, qtype="query") if doembed else np.array(queries)
+        query_embedding = self.embed_with_multi_gpu(queries, qtype="query") if doembed else queries
+        query_embedding = np.array(query_embedding)
 
-        # HACK, not sure why this happens, may want to clean up higher up code
-        if len(query_embedding.shape) == 3:
-            query_embedding = query_embedding.squeeze()
+        breakpoint()
 
         distances, indices = self.indices[index_id].search(query_embedding, min(k, len(self.documents[index_id])))
 
@@ -145,28 +162,75 @@ class SingleEasyIndexer(EasyIndexerBase):
         return distances[0], indices[0]
 
 
-# ColBERT-style
+
 class ColBERTEasyIndexer(EasyIndexerBase):
-    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='cache/colbert_indices', num_gpus=4):
-        super().__init__(model_name, index_base_path, num_gpus)
+    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='cache/colbert_indices', gpu_list=[0,1,2,3,4,5,6,7]):
+        # If gpu_list is None, default to single GPU
+        if gpu_list is None:
+            gpu_list = [0]
+        self.gpu_list = gpu_list
+        self.num_workers = len(gpu_list)
+        
+        # Initialize base class (you may need to adjust this depending on EasyIndexerBase)
+        super().__init__(model_name, index_base_path, self.num_workers)
+        self.models = []  # Store multiple model instances
 
     def load_model(self):
         if self.model is None:
             print("Loading ColBERT model")
             self.model = models.ColBERT(model_name_or_path=self.model_name)
 
-    def index_exists(self, index_id):
-        return os.path.exists(os.path.join(self.index_base_path, f"fast_plaid_index"))
+    def load_models_for_workers(self):
+        """Load a separate model instance for each worker (can have multiple workers per GPU)"""
+        if len(self.models) == 0:
+            print(f"Loading {self.num_workers} model instances across GPUs: {set(self.gpu_list)}")
+            for worker_id, gpu_id in enumerate(tqdm(self.gpu_list)):
+                model = models.ColBERT(model_name_or_path=self.model_name, device=f'cuda:{gpu_id}')
+                self.models.append((model, gpu_id, worker_id))
+                # print(f"  Worker {worker_id} -> GPU {gpu_id}")
 
-    def embed_with_multi_gpu(self, documents, qtype="document", batch_size=8):
+    def embed_with_multi_gpu(self, documents, qtype="document", batch_size=128):
         assert qtype in ['document', 'query'] and type(documents) == list
-        self.load_model()
+        
+        # Use single GPU if only one worker or small dataset
+        if self.num_workers <= 1 or len(documents) < batch_size * 2:
+            self.load_model()
+            return self.model.encode(documents, batch_size=batch_size, is_query=qtype=="query", show_progress_bar=True)
+        
+        # Multi-worker encoding
+        self.load_models_for_workers()
+        
+        # Split documents across workers
+        chunk_size = (len(documents) + self.num_workers - 1) // self.num_workers
+        document_chunks = [documents[i:i + chunk_size] for i in range(0, len(documents), chunk_size)]
+        
+        def encode_on_worker(model_gpu_worker, docs):
+            model, gpu_id, worker_id = model_gpu_worker
+            # Ensure model is on correct GPU
+            return model.encode(docs, batch_size=batch_size, is_query=qtype=="query", show_progress_bar=True)
+        
+        # Process chunks in parallel across workers
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            futures = [
+                executor.submit(encode_on_worker, self.models[i], chunk)
+                for i, chunk in enumerate(document_chunks) if len(chunk) > 0
+            ]
+            results = [future.result() for future in futures]
+        
+        # breakpoint()
+        allresults = []
+        for result in results:
+            allresults.extend(result)
+        # Concatenate results
+        return allresults
 
-        return self.model.encode(documents, batch_size=batch_size, is_query=qtype=="query", show_progress_bar=True)
+    def index_exists(self, index_id):
+        # breakpoint()
+        return os.path.exists(os.path.join(self.index_base_path, index_id, f"fast_plaid_index"))
 
-    def index_documents(self, documents, index_id, emb_bsize=8, pre_embeds=None):
+    def index_documents(self, documents, index_id, pre_embeds=None):
         os.makedirs(self.index_base_path, exist_ok=True)
-        if index_id in self.indices:
+        if self.index_exists(index_id):
             print(f"Index {index_id} already exists")
             return
 
@@ -174,19 +238,20 @@ class ColBERTEasyIndexer(EasyIndexerBase):
             embeds = self.embed_with_multi_gpu(documents, qtype="document")
         else:
             embeds = pre_embeds
-        embeds = np.array(embeds)
+        print("Adding documents to index")
         self.indices[index_id] = indexes.PLAID(index_folder=self.index_base_path, index_name=index_id, override=False)
-        self.indices.add_documents(documents_ids=[str(i) for i in range(len(documents))], documents_embeddings=embeds)
-        self.documents[index_id] = pd.DataFrame(documents, columns=["text"])
-        self.documents[index_id].to_csv(os.path.join(self.index_base_path+"/"+index_id+"/", f"documents.csv"), index=False) # save documents
+        self.indices[index_id].add_documents(documents_ids=[str(i) for i in range(len(documents))], documents_embeddings=embeds)
+        self.documents[index_id] = Dataset.from_dict({"text": documents})
+        self.documents[index_id].save_to_disk(os.path.join(self.index_base_path, f"{index_id}"))
         print(f"Indexed {len(documents)} documents for index {index_id}")
 
     def try_load_cached(self, index_id):
+        # breakpoint()
         if index_id not in self.indices:
             if self.index_exists(index_id) == False:
                 raise ValueError(f"Index {index_id} does not exist")
             self.indices[index_id] = indexes.PLAID(index_folder=self.index_base_path, index_name=index_id, override=False)
-            self.documents[index_id] = pd.read_csv(os.path.join(self.index_base_path+"/"+index_id+"/", f"documents.csv"))
+            self.documents[index_id] = Dataset.load_from_disk(os.path.join(self.index_base_path, f"{index_id}"))
             print(f"Loaded index {index_id} from cache with {len(self.documents[index_id])} documents")
         return self.indices[index_id]
 
@@ -195,17 +260,14 @@ class ColBERTEasyIndexer(EasyIndexerBase):
         assert type(queries) == list, "Queries must be a list"
         query_embedding = self.embed_with_multi_gpu(queries, qtype="query") if doembed else np.array(queries)
         retriever = retrieve.ColBERT(index=self.indices[index_id])
-        results = retriever.retrieve(query_embeddings=query_embedding, k=min(k, len(self.documents[index_id])))
+        results = retriever.retrieve(queries_embeddings=query_embedding, k=min(k, len(self.documents[index_id])))
         return [[{'score': entry['score'], 'index': int(entry['id']), 'index_id': index_id} for entry in result] for result in results]
-
-    def composed_search(self, queries, index_ids, k=10, doembed=True, reverse=False):
-        # just use super but ensure that reverse is True
-        return super().composed_search(queries, index_ids, k=k, doembed=doembed, reverse=True)
 
 # BM25 version of things
 class BM25EasyIndexer(EasyIndexerBase):
-    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='cache/bm25_indices', num_gpus=4):
+    def __init__(self, model_name='bm25', index_base_path='cache/bm25_indices', num_gpus=4):
         super().__init__(model_name, index_base_path, num_gpus)
+        self.stemmer = Stemmer.Stemmer("english")
 
     def load_model(self):
         raise NotImplementedError("BM25EasyIndexer does not need to load a model")
@@ -215,13 +277,16 @@ class BM25EasyIndexer(EasyIndexerBase):
         
     def index_documents(self, documents, index_id):
         os.makedirs(self.index_base_path, exist_ok=True)
-        if index_id in self.indices:
+        if self.index_exists(index_id):
             print(f"Index {index_id} already exists")
             return
-        self.indices[index_id] = BM25Okapi([document.split(" ") for document in documents])
+        tokenized = bm25s.tokenize(documents, stopwords="en", stemmer=self.stemmer)
+        retriever = bm25s.BM25()
+        retriever.index(tokenized)
+        self.indices[index_id] = retriever
         pickdump(self.indices[index_id], os.path.join(self.index_base_path, index_id+".bm25"))
-        self.documents[index_id] = pd.DataFrame(documents, columns=["text"])
-        self.documents[index_id].to_csv(os.path.join(self.index_base_path+"/"+index_id+"/", f"documents.csv"), index=False) # save documents
+        self.documents[index_id] = Dataset.from_dict({"text": documents})
+        self.documents[index_id].save_to_disk(os.path.join(self.index_base_path, f"{index_id}")) # save documents
         print(f"Indexed {len(documents)} documents for index {index_id}")
     
     def try_load_cached(self, index_id):
@@ -229,19 +294,33 @@ class BM25EasyIndexer(EasyIndexerBase):
             if self.index_exists(index_id) == False:
                 raise ValueError(f"Index {index_id} does not exist")
             self.indices[index_id] = pickload(os.path.join(self.index_base_path, index_id+".bm25"))
-            self.documents[index_id] = pd.read_csv(os.path.join(self.index_base_path+"/"+index_id+"/", f"documents.csv"))
+            self.documents[index_id] = Dataset.load_from_disk(os.path.join(self.index_base_path, f"{index_id}"))
             print(f"Loaded index {index_id} from cache with {len(self.documents[index_id])} documents")
         return self.indices[index_id]
 
     def search(self, queries, index_id, k=10):
         self.try_load_cached(index_id)
         assert type(queries) == list, "Queries must be a list"
-        queries = [query.split(" ") for query in queries]
-        def singleresult(query): 
-            tops = np.argsort(self.indices[index_id].get_scores(query))[::-1][:k]
-            return [{'score': self.indices[index_id].get_scores(query)[i], 'index': i, 'index_id': index_id} for i in tops]
-        return [singleresult(query) for query in queries]
+        queries = [bm25s.tokenize(query, stemmer=self.stemmer) for query in queries]
+        bm25 = self.indices[index_id]
+        allresults = []
+        print("started search")
+        for query in tqdm(queries):
+            # Get scores once (not twice like before)
+            results, scores = bm25.retrieve(query, k=min(k, len(self.documents[index_id])))
+            # Extract scores for top k indices
+            allresults.append([{'score': scores[0][i], 'index': results[0][i], 'index_id': index_id} for i in range(len(results[0]))])
+        return allresults
 
     def composed_search(self, queries, index_ids, k=10, reverse=False):
         # just use super but ensure that reverse is True
         return super().composed_search(queries, index_ids, k=k, reverse=True)
+
+
+class RandomEasyIndexer(BM25EasyIndexer):
+
+    # make the search random
+    def search(self, queries, index_id, k=10):
+        self.try_load_cached(index_id)
+        assert type(queries) == list, "Queries must be a list"
+        return [[{'score': random.random(), 'index': random.randint(0, len(self.documents[index_id])-1), 'index_id': index_id} for _ in range(k)] for _ in queries]

@@ -37,12 +37,12 @@ Please answer with only the note, no other text.
 """
 
 # unified to just 1 v2 prompt
-decomposed_prompt_restrictive_v2 = """You are given a passage and a query used to retrieve documents. Is the question directly relevant to the passage? Relevant questions might not always be obvious, and may require deeper reading of the passage. Passages that are not directly relevant to the query should be considered as not relevant.
+decomposed_prompt_restrictive_v2 = """You're given a question and a passage. Answer whether the passage directly applies to the question. Relevant questions might not always be obvious, and may require deeper reading, but if the passage doesn't directly apply to the question you should answer no.
 
-QUERY: {}
+QUESTION: {}
 PASSAGE: {}
 
-Answer with yes or no, no other text.
+Answer whether the passage directly applies to the question. Answer with just yes or no, don't include any other text.
 """
 
 categorize_prompt = """

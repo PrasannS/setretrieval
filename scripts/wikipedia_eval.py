@@ -1,0 +1,87 @@
+### notebook that will get results for wikipedia eval set (TODO may add other datasets later)
+from setretrieval.inference.easy_indexer import BM25EasyIndexer, ColBERTEasyIndexer, SingleEasyIndexer, RandomEasyIndexer
+import argparse
+from datasets import Dataset
+import os
+from setretrieval.utils.utils import pickdump, pickload
+from statistics import mean
+
+def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precision"):
+
+    useddocs = [idxer.documents[idx_id][pred['index']]['text'] for pred in predictions]
+    useddocs = set(useddocs)
+    truepositives = set(truepositives)
+
+    # return precision, recall
+    if metric == "precision":
+        return len(useddocs.intersection(truepositives)) / len(useddocs)
+    elif metric == "recall":
+        return len(useddocs.intersection(truepositives)) / min(len(truepositives), len(useddocs))
+    elif metric == "atleastone": 
+        return 1 if len(useddocs.intersection(truepositives)) > 0 else 0
+    else:
+        raise ValueError(f"Invalid metric: {metric}")
+
+def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
+
+    if indextype == "bm25":
+        indexer = BM25EasyIndexer()
+    elif indextype == "colbert":
+        indexer = ColBERTEasyIndexer(model_name=modelname)
+    elif indextype == "single":
+        indexer = SingleEasyIndexer(model_name=modelname)
+    elif indextype == "random": 
+        indexer = RandomEasyIndexer() # works like BM25 technically
+    else:
+        raise ValueError(f"Invalid index type: {indextype}")
+
+    # process the dataset in one go, make an index for it
+    index_id = indexer.index_dataset(datasetpath)
+    
+    eval_set = Dataset.load_from_disk(evalsetpath)
+
+    # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
+    results = indexer.search(list(eval_set["question"]), index_id, k)
+
+    # evaluate the results
+    metres = {'precision': [], 'recall': [], 'atleastone': []}
+    for met in metres.keys():
+        metres[met].extend([indexer_eval_row(results[i], eval_set[i]["pos_chunks"], indexer, index_id, met) for i in range(len(results))])
+
+    return metres
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--index_type", type=str, default="bm25")
+    parser.add_argument("--model_name", type=str, default="bm25")
+    parser.add_argument("--dataset_path", type=str, default="data/datastores/wikipedia_docs_15k")
+    parser.add_argument("--eval_set_path", type=str, default="data/evalsets/settest_v1")
+    parser.add_argument("--k", type=int, default=10)
+    args = parser.parse_args()
+
+
+    print("starting eval")
+    
+    os.makedirs("cache/setresults/", exist_ok=True)
+    
+    resultkey = args.eval_set_path.split("/")[-1]
+    dsrep = args.dataset_path.replace("/", "_")
+    methodkey = f"{args.index_type}-{args.model_name}-{args.k}-{dsrep}"
+
+    if os.path.exists("cache/setresults/"+resultkey+".pkl"): 
+        metresults = pickload("cache/setresults/"+resultkey+".pkl")
+    else:
+        metresults = {}
+
+    # we have at least 3 metrics
+    if methodkey in metresults and len(metresults[methodkey]) == 3:
+        print(f"Loading results from cache for {resultkey}")
+        metres = metresults[methodkey]
+    else:
+        metres = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k)
+        metresults[methodkey] = metres
+        pickdump(metresults, "cache/setresults/"+resultkey+".pkl")
+
+    print(f"Mean precision: {mean(metres['precision'])}")
+    print(f"Mean recall: {mean(metres['recall'])}")
+    print(f"Mean atleastone: {mean(metres['atleastone'])}")
