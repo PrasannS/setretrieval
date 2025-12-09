@@ -14,6 +14,9 @@ if __name__ == "__main__":
     parser.add_argument("--k", type=int, default=10)
     args = parser.parse_args()
 
+    # make folder called gendata in cache
+    os.makedirs("cache/gendata", exist_ok=True)
+
     dataset = Dataset.load_from_disk(args.dataset_path)
     # try to take another node...
     question_set = DatasetDict.load_from_disk(args.starter_question_set)['train'].select(range(5200, 10000))
