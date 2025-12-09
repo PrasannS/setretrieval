@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=128
 #SBATCH --gpus=8               # Request 8 GPUs on the node
 #SBATCH --mem=400G                 # Adjust as needed
-#SBATCH --time=24:00:00
+#SBATCH --time=72:00:00
 #SBATCH --qos=normal
 #SBATCH --output=logs/generate_bigdata-%j.out
 

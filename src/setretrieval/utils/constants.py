@@ -37,13 +37,37 @@ Please answer with only the note, no other text.
 """
 
 # unified to just 1 v2 prompt
-decomposed_prompt_restrictive_v2 = """You're given a question and a passage. Answer whether the passage directly applies to the question. Relevant questions might not always be obvious, and may require deeper reading, but if the passage doesn't directly apply to the question you should answer no.
+decomposed_prompt_restrictive_4B = """You're given a question and a passage. Answer whether the passage directly applies to the question. Relevant questions might not always be obvious, and may require deeper reading, but if the passage doesn't directly apply to the question you should answer no.
 
 QUESTION: {}
+
 PASSAGE: {}
 
 Answer whether the passage directly applies to the question. Answer with just yes or no, don't include any other text.
 """
+
+decomposed_prompt_restrictive_8B = """
+You are an expert at analyzing text passages. You are given a passage and a query used to retrieve documents. Based on reading the passage carefully, you need to determine if the passage meets the criteria of the query.
+Passages that are not directly relevant to the query should be considered as not relevant, but different kinds of passages might be relevant.
+
+QUERY: {}
+
+PASSAGE (RAW TEXT): {}
+
+Please answer with yes or no, no other text.
+"""
+
+decomposed_prompt_restrictive_oai = """
+You are an expert at analyzing text passages. You are given a passage and a query used to retrieve documents. You need to determine if the passage meets the criteria of the query.
+Passages that are not directly relevant to the query should be considered as not relevant.
+
+QUERY: {}
+
+PASSAGE (RAW TEXT): {}
+
+Please answer with yes or no, no other text.
+"""
+
 
 categorize_prompt = """
 You're given a question which is used to retrieve sets of passages from a diverse passage set(containing wikipedia, news, textbooks, novels, blogs, etc.). Categorize it into one of the following categories:

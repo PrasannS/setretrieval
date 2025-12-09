@@ -32,7 +32,7 @@ class VLLMWrapper:
     # can use this to clean up memory if we want to load / use a new model
     def delete_model(self):
 
-        self.model.llm_engine.shutdown()
+        self.model.llm_engine.engine_core.shutdown()
         del self.model
         del self.toker
         # Clear GPU cache

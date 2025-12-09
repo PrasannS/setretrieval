@@ -1,5 +1,6 @@
 from ..inference.oai_request_client import ParallelResponsesClient, PRICING
-from ..utils.constants import categorize_prompt, conceptual_rephrase_prompt, abstract_questions_prompt, example_abstract_passage, example_abstract_questions, decomposed_prompt_restrictive_v2
+from ..utils.constants import categorize_prompt, conceptual_rephrase_prompt, abstract_questions_prompt, example_abstract_passage, example_abstract_questions
+from ..utils.constants import decomposed_prompt_restrictive_4B, decomposed_prompt_restrictive_8B, decomposed_prompt_restrictive_oai
 from collections import Counter
 from datasets import Dataset
 from ..inference.vllm_wrapper import VLLMWrapper
@@ -97,6 +98,16 @@ def possearch_singlestage(prior_positives, queries, model, cache):
 
     # breakpoint()
     # only use the first one for now
+
+    if os.path.exists(cache):
+        # breakpoint()
+        allresponses = pickload(cache)
+        breakpoint()
+        if len(allresponses) == len(prior_positives):
+            allresponses = [prior_positives[i][j] for i in range(len(prior_positives)) for j in range(len(prior_positives[i])) if allresponses[i][j]]
+            return allresponses, 0
+    else:
+        allresponses = []
     
     use_oai = model in PRICING.keys()
     if use_oai:
@@ -110,46 +121,69 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         vllm_wrapper = VLLMWrapper(model)
         proc_fct = lambda x: vllm_wrapper.generate(x)
     
-    prior_posvals = list(prior_positives[0])
     
-    allresponses = []
-    for i in tqdm(range(len(queries))):
-        prompts = [decomposed_prompt_restrictive_v2.format(queries[i], doc) for doc in prior_posvals]
+    print("Mean length of prior positives: ", sum([len(pos) for pos in prior_positives])/len(prior_positives))
+
+    if model == "Qwen/Qwen3-8B":
+        prompt = decomposed_prompt_restrictive_8B
+    elif model == "Qwen/Qwen3-4B":
+        prompt = decomposed_prompt_restrictive_4B
+    else:
+        prompt = decomposed_prompt_restrictive_oai
+
+    if len(prior_positives) != len(queries): 
+        print("WARNING POSITIVES / QUERY COUNTS DO NOT MATCH")
+
+    for i in tqdm(range(len(allresponses), len(prior_positives))):
+        prior_posvals = list(prior_positives[i])
+        prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
         responses = proc_fct(prompts)
         responses = ["yes" in response.outputs[0].text.lower().strip() for response in responses]
         print("Num queries relevant to passage: ", sum(responses))
         allresponses.append(responses)
         pickdump(allresponses, cache)
 
-
-    cost = 0 if use_oai else vllm_wrapper.total_cost
+    cost = 0 if use_oai==False else oai_client.total_cost
     print(f"Total cost: {cost}")
-    responses_grouped = []
+
+    # convert to list of positive passages
+    allresponses = [prior_positives[i][j] for i in range(len(prior_positives)) for j in range(len(prior_positives[i])) if allresponses[i][j]]
+
     # for each stage, return list of passages relevant to the query
     if not use_oai:
         vllm_wrapper.delete_model()
-    return responses_grouped, cost
+    return allresponses, cost
 
-def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qwen3-4B", "gemini-2.5-flash", "gemini-2.5-pro"], cache="cache/gendata/"):
+def chunks_to_inds(clist):
+    # given list of booleans, return indices where True
+    return [i for i, c in enumerate(clist) if c]
+
+def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qwen3-4B", "Qwen/Qwen3-8B", "gemini-2.5-flash", "gemini-2.5-pro"], actualpassages=None, cache="cache/gendata/"):
     # initialize loop, in gutenberg / other custom cases we can also pass in large loops to begin with
     if type(passages[0]) is not list:
         print("Using the same passage set for all questions.")
         previouspasses = [passages for _ in questions]
-    
-    # map passage to index
-    pass2ind = {passage: i for i, passage in enumerate(tqdm(passages, desc="Mapping passages to indices"))}
-    # load cache if it exists
-    if os.path.exists(cache+f"{cachekey}.pkl"):
-        selectresults = pickload(cache+f"{cachekey}.pkl")
     else:
-        selectresults = {}
+        previouspasses = passages
+    
+    if actualpassages is None:
+        actualpassages = passages
+    # map passage to index
+    pass2ind = {passage: i for i, passage in enumerate(tqdm(actualpassages, desc="Mapping passages to indices"))}
+    # load cache if it exists
+    # if os.path.exists(cache+f"{cachekey}.pkl"):
+    #     selectresults = pickload(cache+f"{cachekey}.pkl")
+    # else:
+    selectresults = {}
     for i in range(len(models)):
+        # breakpoint()
         if models[i] in selectresults:
-            previouspasses = [passages[ind] for ind in selectresults[models[i]]['keep_indices']]
+            previouspasses = [actualpassages[ind] for ind in selectresults[models[i]]['keep_indices']]
             cost = selectresults[models[i]]['cost']
         else:
             currentpasses, cost = possearch_singlestage(previouspasses, questions, models[i], cache+f"{cachekey}_{i}.pkl")
             print(f"Stage {i} cost: {cost}")
+            breakpoint()
             # save to use later
             curinds = [[pass2ind[passage] for passage in currentpasses[j]] for j in range(len(currentpasses))]
             selectresults[models[i]] = {'keep_indices': curinds, 'cost': cost}
