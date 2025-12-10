@@ -53,7 +53,7 @@ class ParallelResponsesClient:
         cache_db: str = "cache/response_cache.db",
         log_file: str = "cache/requests_log.jsonl",
         use_cache: bool = True,
-        openai_key_path: Optional[str] = "/accounts/projects/sewonm/prasann/oaikey.sh",
+        openai_key_path: Optional[str] = "~/oaikey.sh",
         use_vertexai: bool = True
     ):
         

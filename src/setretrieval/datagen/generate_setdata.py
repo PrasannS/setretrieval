@@ -21,7 +21,6 @@ def passages_to_questions(passages, model="gemini-2.5-pro"):
         resp = abstract_questions_responses[i]['response']
         passage['questions'] = [] if resp is None else resp.split("\n")
         passage['cost'] = abstract_questions_responses[i]['cost_usd']
-
     return passages
 
 # Take in querydata (dataset with 'query' and 'pos' and 'neg' columns)
@@ -98,14 +97,19 @@ def possearch_singlestage(prior_positives, queries, model, cache):
 
     # breakpoint()
     # only use the first one for now
-
     if os.path.exists(cache):
         # breakpoint()
         allresponses = pickload(cache)
-        breakpoint()
-        if len(allresponses) == len(prior_positives):
-            allresponses = [prior_positives[i][j] for i in range(len(prior_positives)) for j in range(len(prior_positives[i])) if allresponses[i][j]]
-            return allresponses, 0
+        # breakpoint()
+        # some fault tolerance
+        if len(allresponses) > len(prior_positives)-2:
+            newresps = []
+            for i in range(min(len(allresponses), len(prior_positives))):
+                if len(prior_positives[i]) == 0:
+                    newresps.append([])
+                else:
+                    newresps.append([prior_positives[i][j] for j in range(len(prior_positives[i])) if allresponses[i][j]])
+            return newresps, 0
     else:
         allresponses = []
     
@@ -113,7 +117,7 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     if use_oai:
         print(f"Using OAI model: {model}")
         # use oai model
-        oai_client = ParallelResponsesClient(max_concurrent=100)
+        oai_client = ParallelResponsesClient(max_concurrent=100, openai_key_path="/accounts/projects/berkeleynlp/prasann/oaikey.sh")
         proc_fct = lambda x: oai_client.run(model=model, prompts=x)
     else:
         print(f"Using VLLM model: {model}")
@@ -134,18 +138,39 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     if len(prior_positives) != len(queries): 
         print("WARNING POSITIVES / QUERY COUNTS DO NOT MATCH")
 
-    for i in tqdm(range(len(allresponses), len(prior_positives))):
-        prior_posvals = list(prior_positives[i])
-        prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
-        responses = proc_fct(prompts)
-        responses = ["yes" in response.outputs[0].text.lower().strip() for response in responses]
-        print("Num queries relevant to passage: ", sum(responses))
-        allresponses.append(responses)
-        pickdump(allresponses, cache)
+    if use_oai:
+        # for oai, put all queries together into one big list, then group them together later
+        allprompts = []
+        origlens = [len(prior_positives[i]) for i in range(len(prior_positives))]
+        for i in tqdm(range(len(prior_positives)), desc="Formatting prompts"):
+            prior_posvals = list(prior_positives[i])
+            prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
+            allprompts.extend(prompts)
+        responses = []
+        for i in range(0, len(allprompts), 5000):
+            responses.extend(proc_fct(allprompts[i:i+5000]))
+            print("Cost so far: ", oai_client.total_cost)
+        responses = [response['response'] for response in responses]
+        responses = [response.lower().strip() == "yes" if response is not None else False for response in responses]
+        allresponses = []
+        ind = 0
+        for i in range(len(origlens)):
+            allresponses.append(responses[ind:ind+origlens[i]])
+            ind += origlens[i]
+    else:
+        for i in tqdm(range(len(allresponses), len(prior_positives))):
+            prior_posvals = list(prior_positives[i])
+            prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
+            responses = proc_fct(prompts)
+            responses = ["yes" in response.outputs[0].text.lower().strip() for response in responses]
+            print("Num queries relevant to passage: ", sum(responses))
+            allresponses.append(responses)
+    pickdump(allresponses, cache)
 
     cost = 0 if use_oai==False else oai_client.total_cost
     print(f"Total cost: {cost}")
 
+    # breakpoint()
     # convert to list of positive passages
     allresponses = [prior_positives[i][j] for i in range(len(prior_positives)) for j in range(len(prior_positives[i])) if allresponses[i][j]]
 
@@ -183,9 +208,9 @@ def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qw
         else:
             currentpasses, cost = possearch_singlestage(previouspasses, questions, models[i], cache+f"{cachekey}_{i}.pkl")
             print(f"Stage {i} cost: {cost}")
-            breakpoint()
+            # breakpoint()
             # save to use later
-            curinds = [[pass2ind[passage] for passage in currentpasses[j]] for j in range(len(currentpasses))]
+            curinds = [[pass2ind[passage] if len(passage) > 10 else -1 for passage in currentpasses[j]] for j in range(len(currentpasses))]
             selectresults[models[i]] = {'keep_indices': curinds, 'cost': cost}
             previouspasses = currentpasses
             pickdump(selectresults, cache+f"{cachekey}.pkl")

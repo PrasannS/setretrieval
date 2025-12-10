@@ -26,11 +26,11 @@ if __name__ == "__main__":
     else:
         tmpres = pickload("cache/gendata/passagesearchtrain_v1_5.2k_0.pkl")
         # tmpres = tmpres[:2]
-        allpos = [[]]
+        allpos = []
         if True:
             for r in tqdm(tmpres, desc="Converting to indices"):
                 # each r is a list of 
                 inds = chunks_to_inds(r)
                 allpos.append([dataset[ind]['text'] for ind in inds])
         # allpos = [[] for _ in range(len(tmpres))]
-        selectresults = hierarchical_positive_search(allpos, question_set["query"], "passagesearchtrain_v1_5.2k_4Bstartv2", actualpassages=dataset["text"], models=["Qwen/Qwen3-8B", "gpt-5-mini"])
+        selectresults = hierarchical_positive_search(allpos, question_set["query"], "passagesearchtrain_v1_5.2k_4Bstartv2", actualpassages=dataset["text"], models=["Qwen/Qwen3-8B", "gemini-2.5-flash"])
