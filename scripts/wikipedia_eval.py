@@ -28,6 +28,8 @@ def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
         indexer = ColBERTEasyIndexer(model_name=modelname)
+    elif indextype == "divcolbert": 
+        indexer = ColBERTEasyIndexer(model_name=modelname, div_colbert=True)
     elif indextype == "single":
         indexer = SingleEasyIndexer(model_name=modelname)
     elif indextype == "random": 
@@ -37,11 +39,11 @@ def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
 
     # process the dataset in one go, make an index for it
     index_id = indexer.index_dataset(datasetpath)
-    
     eval_set = Dataset.load_from_disk(evalsetpath)
 
     # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
     results = indexer.search(list(eval_set["question"]), index_id, k)
+
 
     # evaluate the results
     metres = {'precision': [], 'recall': [], 'atleastone': []}
@@ -54,22 +56,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--index_type", type=str, default="bm25")
     parser.add_argument("--model_name", type=str, default="bm25")
-    parser.add_argument("--dataset_path", type=str, default="data/datastores/wikipedia_docs_15k")
-    parser.add_argument("--eval_set_path", type=str, default="data/evalsets/settest_v1")
+    parser.add_argument("--dataset_path", type=str, default="propercache/data/datastores/wikipedia_docs_15k")
+    parser.add_argument("--eval_set_path", type=str, default="propercache/data/evalsets/settest_v1_paraphrased")
     parser.add_argument("--k", type=int, default=10)
     args = parser.parse_args()
 
 
     print("starting eval")
     
-    os.makedirs("cache/setresults/", exist_ok=True)
+    os.makedirs("propercache/cache/setresults/", exist_ok=True)
     
     resultkey = args.eval_set_path.split("/")[-1]
     dsrep = args.dataset_path.replace("/", "_")
     methodkey = f"{args.index_type}-{args.model_name}-{args.k}-{dsrep}"
 
-    if os.path.exists("cache/setresults/"+resultkey+".pkl"): 
-        metresults = pickload("cache/setresults/"+resultkey+".pkl")
+    if os.path.exists("propercache/cache/setresults/"+resultkey+".pkl"): 
+        metresults = pickload("propercache/cache/setresults/"+resultkey+".pkl")
     else:
         metresults = {}
 
@@ -80,7 +82,7 @@ if __name__ == "__main__":
     else:
         metres = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k)
         metresults[methodkey] = metres
-        pickdump(metresults, "cache/setresults/"+resultkey+".pkl")
+        pickdump(metresults, "propercache/cache/setresults/"+resultkey+".pkl")
 
     print(f"Mean precision: {mean(metres['precision'])}")
     print(f"Mean recall: {mean(metres['recall'])}")

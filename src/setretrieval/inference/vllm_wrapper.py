@@ -27,7 +27,10 @@ class VLLMWrapper:
         else: 
             prompts = [self.toker.apply_chat_template([{"role": "user", "content": p}], add_generation_prompt=True, tokenize=False) for p in tqdm(prompts, desc="Tokenizing prompts")]
         # breakpoint()
-        return self.model.generate(prompts, sampling_params=sampling_params)
+        allres = []
+        for i in tqdm(range(0, len(prompts), 5000), desc="Generating responses"):
+            allres.extend(self.model.generate(prompts[i:i+5000], sampling_params=sampling_params))
+        return allres
     
     # can use this to clean up memory if we want to load / use a new model
     def delete_model(self):

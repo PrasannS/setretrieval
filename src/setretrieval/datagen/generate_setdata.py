@@ -117,7 +117,7 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     if use_oai:
         print(f"Using OAI model: {model}")
         # use oai model
-        oai_client = ParallelResponsesClient(max_concurrent=100, openai_key_path="/accounts/projects/berkeleynlp/prasann/oaikey.sh")
+        oai_client = ParallelResponsesClient(max_concurrent=100, openai_key_path="/accounts/projects/sewonm/prasann/oaikey.sh")
         proc_fct = lambda x: oai_client.run(model=model, prompts=x)
     else:
         print(f"Using VLLM model: {model}")
@@ -128,9 +128,9 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     
     print("Mean length of prior positives: ", sum([len(pos) for pos in prior_positives])/len(prior_positives))
 
-    if model == "Qwen/Qwen3-8B":
+    if "Qwen/Qwen3-8B" in model:
         prompt = decomposed_prompt_restrictive_8B
-    elif model == "Qwen/Qwen3-4B":
+    elif "Qwen/Qwen3-4B" in model:
         prompt = decomposed_prompt_restrictive_4B
     else:
         prompt = decomposed_prompt_restrictive_oai
@@ -142,7 +142,7 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         # for oai, put all queries together into one big list, then group them together later
         allprompts = []
         origlens = [len(prior_positives[i]) for i in range(len(prior_positives))]
-        for i in tqdm(range(len(prior_positives)), desc="Formatting prompts"):
+        for i in tqdm(range(len(queries)), desc="Formatting prompts"):
             prior_posvals = list(prior_positives[i])
             prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
             allprompts.extend(prompts)
@@ -156,7 +156,9 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         ind = 0
         for i in range(len(origlens)):
             allresponses.append(responses[ind:ind+origlens[i]])
+            pickdump(allresponses, cache)
             ind += origlens[i]
+        
     else:
         for i in tqdm(range(len(allresponses), len(prior_positives))):
             prior_posvals = list(prior_positives[i])
@@ -165,7 +167,8 @@ def possearch_singlestage(prior_positives, queries, model, cache):
             responses = ["yes" in response.outputs[0].text.lower().strip() for response in responses]
             print("Num queries relevant to passage: ", sum(responses))
             allresponses.append(responses)
-    pickdump(allresponses, cache)
+            pickdump(allresponses, cache)
+
 
     cost = 0 if use_oai==False else oai_client.total_cost
     print(f"Total cost: {cost}")
@@ -183,7 +186,7 @@ def chunks_to_inds(clist):
     # given list of booleans, return indices where True
     return [i for i, c in enumerate(clist) if c]
 
-def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qwen3-4B", "Qwen/Qwen3-8B", "gemini-2.5-flash", "gemini-2.5-pro"], actualpassages=None, cache="cache/gendata/"):
+def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qwen3-4B", "Qwen/Qwen3-8B", "gemini-2.5-flash", "gemini-2.5-pro"], actualpassages=None, cache="propercache/cache/gendata/"):
     # initialize loop, in gutenberg / other custom cases we can also pass in large loops to begin with
     if type(passages[0]) is not list:
         print("Using the same passage set for all questions.")

@@ -9,6 +9,8 @@ logs/
 wandb/
 data/
 
+*.out
+
 # C extensions
 *.so
 

@@ -9,21 +9,29 @@ from setretrieval.datagen.generate_setdata import chunks_to_inds
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_path", type=str, default="data/datastores/wikipedia_docs_15k")
-    parser.add_argument("--starter_question_set", type=str, default="data/colbert_training/gemini_ntrain_ptest")
-    parser.add_argument("--k", type=int, default=10)
+    parser.add_argument("--dataset_path", type=str, default="propercache/data/datastores/wikipedia_docs_10k_decont")
+    parser.add_argument("--starter_question_set", type=str, default="propercache/data/colbert_training/gemini_ntrain_ptest")
+    parser.add_argument("--startindex", type=int, default=0)
+    parser.add_argument("--endindex", type=int, default=1500)
     args = parser.parse_args()
 
     # make folder called gendata in cache
-    os.makedirs("cache/gendata", exist_ok=True)
+    os.makedirs("propercache/cache/gendata", exist_ok=True)
 
     dataset = Dataset.load_from_disk(args.dataset_path)
     # try to take another node...
-    question_set = DatasetDict.load_from_disk(args.starter_question_set)['train'].select(range(5200, 10000))
+    question_set = DatasetDict.load_from_disk(args.starter_question_set)['train'].select(range(args.startindex, args.endindex))
 
-    if False:
-        selectresults = hierarchical_positive_search(dataset["text"], question_set["query"], "passagesearchtrain_v1_5.2k", models=["Qwen/Qwen3-4B"])
+    test = False
+    keyval = f"passagesearchtrain_v2_{args.startindex}_{args.endindex}"
+    questions = question_set["query"]
+    if test:
+        keyval = keyval + "_test"
+        questions = questions[:3]
+    if True:
+        selectresults = hierarchical_positive_search(dataset["text"], questions, keyval, models=["/accounts/projects/sewonm/prasann/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218"])
     else:
+        # debug thing, forget for now
         tmpres = pickload("cache/gendata/passagesearchtrain_v1_5.2k_0.pkl")
         # tmpres = tmpres[:2]
         allpos = []
@@ -33,4 +41,4 @@ if __name__ == "__main__":
                 inds = chunks_to_inds(r)
                 allpos.append([dataset[ind]['text'] for ind in inds])
         # allpos = [[] for _ in range(len(tmpres))]
-        selectresults = hierarchical_positive_search(allpos, question_set["query"], "passagesearchtrain_v1_5.2k_4Bstartv2", actualpassages=dataset["text"], models=["Qwen/Qwen3-8B", "gemini-2.5-flash"])
+        selectresults = hierarchical_positive_search(allpos, question_set["query"], f"passagesearchtrain_v1_{args.startindex}_{args.endindex}", actualpassages=dataset["text"], models=["Qwen/Qwen3-8B", "gemini-2.5-flash"])

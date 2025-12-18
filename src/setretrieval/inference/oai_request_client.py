@@ -50,8 +50,8 @@ class ParallelResponsesClient:
     def __init__(
         self,
         max_concurrent: int = 25,
-        cache_db: str = "cache/response_cache.db",
-        log_file: str = "cache/requests_log.jsonl",
+        cache_db: str = "propercache/cache/response_cache.db",
+        log_file: str = "propercache/cache/requests_log.jsonl",
         use_cache: bool = True,
         openai_key_path: Optional[str] = "~/oaikey.sh",
         use_vertexai: bool = True
