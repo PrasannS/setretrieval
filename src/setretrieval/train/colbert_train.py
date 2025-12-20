@@ -159,16 +159,16 @@ class SetContrastive(nn.Module):
 
 
 # dataset should be loaded in first, should have format of [query, positive, negative]
-def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1", div_coeff=1.0, colscore="maxmax"):
+def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1", div_coeff=1.0, colscore="maxmax", querylen=256):
     """Train set retrieval models."""
 
     # Set the run name for logging and output directory
-    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}-{colscore}-div{div_coeff}"
+    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}-{colscore}-div{div_coeff}-qlen{querylen}"
     output_dir = f"propercache/cache/colbert_training/{run_name}"
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. Here we define our ColBERT model. If not a ColBERT model, will add a linear layer to the base encoder.
-    model = models.ColBERT(model_name_or_path=base_model)
+    model = models.ColBERT(model_name_or_path=base_model, query_length=querylen)
 
     # Compiling the model makes the training faster
     model = torch.compile(model)

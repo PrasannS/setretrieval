@@ -33,4 +33,14 @@
 
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "nountraining100words" #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
 
-torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "nountraining100words" #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "nountraining100words" #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "gemini_abstracttrain" #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "gemini_gutenbergtrain" #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "abstract_relevant_train_40k_filtered" --querylen 256 #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "propercache/models/bertbase" --traintype "colbert" --dataset "gutenberg_prox_train_40k_filtered" --querylen 256 #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 20 --learning_rate 3e-6 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "nountraining100words" --querylen 256  #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 
+
+torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --dataset "gemini_ntrain_ptest" --querylen 64  #> propercache/logs/train$(date +%Y%m%d_%H%M%S).log 

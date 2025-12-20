@@ -56,4 +56,29 @@
 # # for single
 # python scripts/wikipedia_eval.py --index_type single --model_name propercache/cache/sbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-sbert-nountraining10words/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest10 --k 100
 
-python scripts/wikipedia_eval.py --index_type divcolbert --model_name propercache/cache/sbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-sbert-nountraining100words/checkpoint-1560  --dataset_path propercache/data/datastores/heldoutnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+# python scripts/wikipedia_eval.py --index_type single --model_name propercache/cache/sbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-sbert-nountraining100words/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+# python scripts/wikipedia_eval.py --index_type single --model_name propercache/cache/sbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-sbert-nountraining100words/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+
+# python scripts/wikipedia_eval.py --index_type divcolbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-nountraining10words/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-nountraining10words/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/sbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-sbert-nountraining100words/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+# python scripts/wikipedia_eval.py --index_type divcolbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-nountraining100words-maxmax-div1.0/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-abstract_relevant_train_40k_filtered-maxsim-div1.0-qlen256/checkpoint-4460  --dataset_path propercache/data/datastores/wikipedia_docs_15k --eval_set_path propercache/data/evalsets/settest_v1_paraphrased --k 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-gemini_abstracttrain-maxsim-div1.0/checkpoint-4210  --dataset_path propercache/data/datastores/wikipedia_docs_15k --eval_set_path propercache/data/evalsets/settest_v1_paraphrased --k 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-gemini_gutenbergtrain-maxsim-div1.0/checkpoint-4210  --dataset_path propercache/data/datastores/wikipedia_docs_15k --eval_set_path propercache/data/evalsets/settest_v1_paraphrased --k 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e10-lr3e-06-nountraining100words-maxsim-div1.0-qlen256/checkpoint-1560  --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-propercache_models_bertbase-bs8-e20-lr3e-05-nountraining100words-maxsim-div1.0-qlen256/checkpoint-2500 --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs8-e20-lr3e-06-nountraining100words-maxsim-div1.0-qlen256/checkpoint-3120 --dataset_path propercache/data/datastores/allnouns --eval_set_path propercache/data/evalsets/nountest100 --k 100
+

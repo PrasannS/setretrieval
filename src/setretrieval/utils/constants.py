@@ -123,6 +123,20 @@ PASSAGE TO USE: {}
 
 The questions should be diverse. Generate in a bulleted list with no other text."""
 
+sciabstract_questions_prompt = """You are a helpful assistant that generates questions from a given text. Given a scientific abstract, generate a question about high-level concepts orr ideas in the passage, that can be used to retrieve the abstract from a corpus of other ones, but will only be true for a few other related abstracts.
+
+Generate a list of 3 straightforward, unambiguous, unique, and high-level questions about properties of the passage. The question can mention relevant domain-specific ideas, but shouldn't be too specific to the abstract.
+Each question should clearly apply to the passage, but be abstract enough that the content of the abstract can't be fully identified by the question. If possible ask questions that could be related to different scientific fields.
+
+EXAMPLE ABSTRACT: {}
+
+ABSTRACT QUESTIONS FOR EXAMPLE ABSTRACT: {}
+
+Now, generate questions based on this abstract:
+
+ABSTRACT TO USE: {}
+
+The questions should be diverse. Generate in a bulleted list with no other text."""
 
 example_abstract_passage = """In many species, only a small fraction of the total sequence of the genome encodes protein. For example, only about 1.5 percent of the human genome consists of protein-coding exons, with over 50 percent of human DNA consisting of non-coding repetitive sequences.[98] The reasons for the presence of so much noncoding DNA in eukaryotic genomes and the extraordinary differences in genome size, or C-value, among species, represent a long-standing puzzle known as the "C-value enigma".[99] However, some DNA sequences that do not code protein may still encode functional non-coding RNA molecules, which are involved in the regulation of gene expression.[100]"""
 

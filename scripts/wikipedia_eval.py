@@ -1,5 +1,5 @@
 ### notebook that will get results for wikipedia eval set (TODO may add other datasets later)
-from setretrieval.inference.easy_indexer import BM25EasyIndexer, ColBERTEasyIndexer, SingleEasyIndexer, RandomEasyIndexer
+from setretrieval.inference.easy_indexer import BM25EasyIndexer, ColBERTEasyIndexer, SingleEasyIndexer, RandomEasyIndexer, TokenColBERTEasyIndexer
 import argparse
 from datasets import Dataset
 import os
@@ -29,7 +29,7 @@ def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
     elif indextype == "colbert":
         indexer = ColBERTEasyIndexer(model_name=modelname)
     elif indextype == "divcolbert": 
-        indexer = ColBERTEasyIndexer(model_name=modelname, div_colbert=True)
+        indexer = TokenColBERTEasyIndexer(model_name=modelname)
     elif indextype == "single":
         indexer = SingleEasyIndexer(model_name=modelname)
     elif indextype == "random": 

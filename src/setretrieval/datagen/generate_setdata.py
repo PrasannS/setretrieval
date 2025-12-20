@@ -9,19 +9,26 @@ from ..utils.utils import pickload, pickdump
 from tqdm import tqdm
 
 # given a pre-processed list of passages with 'text' column, generate abstract questions for each passage.
-def passages_to_questions(passages, model="gemini-2.5-pro"):
+def passages_to_questions(passages, model="gemini-2.5-pro", pfunct=lambda x: abstract_questions_prompt.format(example_abstract_passage, example_abstract_questions, x)):
     oai_request_client = ParallelResponsesClient(max_concurrent=100)
 
     # get abstract questions with the prompt
     passagetexts = [passage['text'].replace("\n", " ") for passage in passages]
-    abstract_questions_prompts = [abstract_questions_prompt.format(example_abstract_passage, example_abstract_questions, passage) for passage in passagetexts]
+    abstract_questions_prompts = [pfunct(passage) for passage in passagetexts]
     abstract_questions_responses = oai_request_client.run(model=model, prompts=abstract_questions_prompts)
     
+    results = []
     for i, passage in enumerate(passages):
         resp = abstract_questions_responses[i]['response']
         passage['questions'] = [] if resp is None else resp.split("\n")
         passage['cost'] = abstract_questions_responses[i]['cost_usd']
-    return passages
+        results.append({
+            'text': passage['text'],
+            'questions': passage['questions'],
+            'cost': passage['cost']
+        })
+    breakpoint()
+    return Dataset.from_list(results)
 
 # Take in querydata (dataset with 'query' and 'pos' and 'neg' columns)
 # Return dataset with more natural questions, as well as some topic categorizations
