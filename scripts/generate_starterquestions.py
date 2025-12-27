@@ -17,7 +17,8 @@ if __name__=="__main__":
     parser.add_argument("--dataset_path", type=str, default="propercache/data/datastores/fullabstractset10k_heldout")
     parser.add_argument("--startindex", type=int, default=0)
     parser.add_argument("--endindex", type=int, default=10000)
-    parser.add_argument("--domain", type=str, default="scientific")
+    parser.add_argument("--domain", type=str, default="wikipedia")
+    parser.add_argument("--model", type=str, default="gemini-2.5-flash-lite")
 
     args = parser.parse_args()
 
@@ -29,10 +30,11 @@ if __name__=="__main__":
         pfunct = lambda x: sciabstract_questions_prompt.format(example_sciabs_passage, example_sciabs_questions, x)
     elif args.domain == "gutenberg":
         pfunct = lambda x: abstract_questions_prompt.format(example_gut_passage, example_gut_questions, x)
-    resultdata = passages_to_questions(dataset, model="gemini-2.5-pro", pfunct=pfunct)
+    resultdata = passages_to_questions(dataset, model=args.model, pfunct=pfunct)
+
+    resultdata.save_to_disk(f"{args.dataset_path}_{args.startindex}_{args.endindex}_{args.model}_questions")
 
     breakpoint()
-    resultdata.save_to_disk(f"{args.dataset_path}_{args.startindex}_{args.endindex}_questions")
 
 
 

@@ -22,8 +22,7 @@ def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precisio
     else:
         raise ValueError(f"Invalid metric: {metric}")
 
-def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
-
+def ds_load_indexer(indextype, modelname, datasetpath):
     if indextype == "bm25":
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
@@ -39,8 +38,13 @@ def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
 
     # process the dataset in one go, make an index for it
     index_id = indexer.index_dataset(datasetpath)
+    return indexer, index_id
+
+def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
+
     eval_set = Dataset.load_from_disk(evalsetpath)
 
+    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath)
     # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
     results = indexer.search(list(eval_set["question"]), index_id, k)
 

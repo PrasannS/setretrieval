@@ -20,7 +20,7 @@ class VLLMWrapper:
             self.model = LLM(model=model_name, tensor_parallel_size=torch.cuda.device_count(), max_model_len=131072)
         self.toker = self.model.get_tokenizer()
 
-    def generate(self, prompts, temp=0.8, max_tokens=10, thinking=False):
+    def generate(self, prompts, temp=0.8, max_tokens=150, thinking=False):
         sampling_params = SamplingParams(temperature=temp, max_tokens=max_tokens)
         if "Qwen" in self.model_name:
             prompts = [self.toker.apply_chat_template([{"role": "user", "content": p}], add_generation_prompt=True, tokenize=False, enable_thinking=thinking) for p in tqdm(prompts, desc="Tokenizing prompts")]

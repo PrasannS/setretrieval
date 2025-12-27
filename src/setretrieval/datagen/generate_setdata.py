@@ -27,7 +27,8 @@ def passages_to_questions(passages, model="gemini-2.5-pro", pfunct=lambda x: abs
             'questions': passage['questions'],
             'cost': passage['cost']
         })
-    breakpoint()
+    print(f"Total cost: {oai_request_client.total_cost}")
+    # breakpoint()
     return Dataset.from_list(results)
 
 # Take in querydata (dataset with 'query' and 'pos' and 'neg' columns)
@@ -125,14 +126,13 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         print(f"Using OAI model: {model}")
         # use oai model
         oai_client = ParallelResponsesClient(max_concurrent=100, openai_key_path="/accounts/projects/sewonm/prasann/oaikey.sh")
-        proc_fct = lambda x: oai_client.run(model=model, prompts=x)
+        proc_fct = lambda x: oai_client.run(model=model, prompts=x, temperature=0.3)
     else:
         print(f"Using VLLM model: {model}")
         # use vllm model, TODO maybe don't need datastore reasoning
         vllm_wrapper = VLLMWrapper(model)
         proc_fct = lambda x: vllm_wrapper.generate(x)
-    
-    
+        
     print("Mean length of prior positives: ", sum([len(pos) for pos in prior_positives])/len(prior_positives))
 
     if "Qwen/Qwen3-8B" in model:
@@ -145,6 +145,7 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     if len(prior_positives) != len(queries): 
         print("WARNING POSITIVES / QUERY COUNTS DO NOT MATCH")
 
+    # breakpoint()
     if use_oai:
         # for oai, put all queries together into one big list, then group them together later
         allprompts = []
@@ -153,28 +154,33 @@ def possearch_singlestage(prior_positives, queries, model, cache):
             prior_posvals = list(prior_positives[i])
             prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
             allprompts.extend(prompts)
+        print("EXAMPLE PROMPT: \n", allprompts[0])
+        # breakpoint()
         responses = []
+        # breakpoint()
         for i in range(0, len(allprompts), 5000):
             responses.extend(proc_fct(allprompts[i:i+5000]))
             print("Cost so far: ", oai_client.total_cost)
         responses = [response['response'] for response in responses]
-        responses = [response.lower().strip() == "yes" if response is not None else False for response in responses]
+        responses = ["yes" in response.lower().strip()  if response is not None else False for response in responses]
         allresponses = []
         ind = 0
         for i in range(len(origlens)):
             allresponses.append(responses[ind:ind+origlens[i]])
             pickdump(allresponses, cache)
             ind += origlens[i]
-        
+        # breakpoint()
     else:
         for i in tqdm(range(len(allresponses), len(prior_positives))):
             prior_posvals = list(prior_positives[i])
-            prompts = [prompt.format(doc, queries[i]) for doc in prior_posvals]
+            prompts = [prompt.format(queries[i], doc) for doc in prior_posvals]
             responses = proc_fct(prompts)
+            # breakpoint()
             responses = ["yes" in response.outputs[0].text.lower().strip() for response in responses]
             print("Num queries relevant to passage: ", sum(responses))
             allresponses.append(responses)
             pickdump(allresponses, cache)
+        
 
 
     cost = 0 if use_oai==False else oai_client.total_cost
@@ -182,12 +188,16 @@ def possearch_singlestage(prior_positives, queries, model, cache):
 
     # breakpoint()
     # convert to list of positive passages
-    allresponses = [prior_positives[i][j] for i in range(len(prior_positives)) for j in range(len(prior_positives[i])) if allresponses[i][j]]
+    newresps = []
+    for i in range(len(prior_positives)):
+        newresps.append([prior_positives[i][j] for j in range(len(prior_positives[i])) if allresponses[i][j]])
 
     # for each stage, return list of passages relevant to the query
     if not use_oai:
         vllm_wrapper.delete_model()
-    return allresponses, cost
+    else:
+        oai_client.close()
+    return newresps, cost
 
 def chunks_to_inds(clist):
     # given list of booleans, return indices where True
@@ -223,5 +233,5 @@ def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qw
             curinds = [[pass2ind[passage] if len(passage) > 10 else -1 for passage in currentpasses[j]] for j in range(len(currentpasses))]
             selectresults[models[i]] = {'keep_indices': curinds, 'cost': cost}
             previouspasses = currentpasses
-            pickdump(selectresults, cache+f"{cachekey}.pkl")
+            # pickdump(selectresults, cache+f"{cachekey}.pkl")
     return selectresults

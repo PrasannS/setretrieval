@@ -23,6 +23,7 @@ from pylate.utils import iter_batch
 import logging
 from pylate.rank.rank import reshape_embeddings, func_convert_to_tensor
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +70,14 @@ class SingleEasyIndexer(EasyIndexerBase):
     def load_model(self):
         if self.model is None:
             print("Loading vanilla sentence transformer model")
-            self.model = LLM(model=self.model_name, tensor_parallel_size=torch.cuda.device_count(), runner="pooling")
-            # self.model = SentenceTransformer(self.model_name, device='cuda:0' if self.available_gpus > 0 else 'cpu', trust_remote_code=True)
-            self.toker = self.model.get_tokenizer()
+            if self.num_gpus == 0:
+                self.model = SentenceTransformer(self.model_name, device='cpu', trust_remote_code=True)
+                self.toker = AutoTokenizer.from_pretrained(self.model_name)
+            else:
+                self.model = LLM(model=self.model_name, tensor_parallel_size=torch.cuda.device_count(), runner="pooling")
+                # self.model = SentenceTransformer(self.model_name, device='cuda:0' if self.available_gpus > 0 else 'cpu', trust_remote_code=True)
+                self.toker = self.model.get_tokenizer()
+    
     def index_exists(self, index_id):
         return os.path.exists(os.path.join(self.index_base_path, f"{index_id}.faiss"))
 
@@ -119,9 +125,12 @@ class SingleEasyIndexer(EasyIndexerBase):
             documents = [f"search_{qtype}: {doc}" for doc in documents]
         elif "Qwen" in self.model_name and qtype == "query":
             documents = [f"Instruct: Find documents, both normal and unexpected, that are relevant to the query.\nQuery: {doc}" for doc in documents]
-        embeddings = self.model.embed(documents)
         
-        embeddings = [e.outputs.embedding for e in embeddings]
+        if self.num_gpus == 0:
+            embeddings = self.model.encode(documents, batch_size=1, show_progress_bar=True)
+        else:
+            embeddings = self.model.embed(documents)
+            embeddings = [e.outputs.embedding for e in embeddings]
         # breakpoint()
         
         return embeddings
@@ -161,13 +170,13 @@ class SingleEasyIndexer(EasyIndexerBase):
 
 
 class ColBERTEasyIndexer(EasyIndexerBase):
-    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='propercache/cache/colbert_indices', gpu_list=[0,1,2,3,4,5,6,7], div_colbert=False):
+    def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='propercache/cache/colbert_indices', gpu_list=None, div_colbert=False):
         # If gpu_list is None, default to single GPU
         if gpu_list is None:
             gpu_list = [0]
         self.div_colbert = div_colbert
         self.gpu_list = list(range(torch.cuda.device_count()))
-        self.num_workers = len(gpu_list)
+        self.num_workers = len(self.gpu_list)
         # breakpoint()
         # Initialize base class (you may need to adjust this depending on EasyIndexerBase)
         super().__init__(model_name, index_base_path, self.num_workers)

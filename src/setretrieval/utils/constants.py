@@ -47,25 +47,28 @@ Answer whether the passage directly applies to the question. Answer with just ye
 """
 
 decomposed_prompt_restrictive_8B = """
-You are an expert at analyzing text passages. You are given a passage and a query used to retrieve documents. Based on reading the passage carefully, you need to determine if the passage meets the criteria of the query.
-Passages that are not directly relevant to the query should be considered as not relevant, but different kinds of passages might be relevant.
+Is it possible that the below passage could be applicable to the query? Answer yes or no. Make sure to read the passage carefully, as unexpected documents might be relevant.
 
 QUERY: {}
 
-PASSAGE (RAW TEXT): {}
+PASSAGE: {}
 
-Please answer with yes or no, no other text.
+Generate a 1 sentence explanation, then answer with 'yes' or 'no' at the end.
 """
 
 decomposed_prompt_restrictive_oai = """
-You are an expert at analyzing text passages. You are given a passage and a query used to retrieve documents. You need to determine if the passage meets the criteria of the query.
-Passages that are not directly relevant to the query should be considered as not relevant.
+You are given a passage and an abstract query. You need to determine if the passage directly meets the criteria of the query. Passages that don't fully match the query should be considered as not relevant. You're given an example below.
+
+EXAMPLE PASSAGE: In the field all guns have to be loaded by hand. The elaborate system of hoists which enables the great naval guns to be loaded with such rapidity is obviously impossible. That has to be compensated for by the gunners themselves, and it is indeed astonishing to see with what deftness they can handle the heavy and dangerous projectiles.With all guns, of whatever kind, range-finding is of the utmost importance. No projectile, however fast it may travel, really moves in a straight line. It must be fired more or less upwards in order to compensate for the downward pull of gravity. If the elevation be insufficient the shell will fall short; if it be too much it may go beyond the mark, or it may fall short, according to circumstances. Just the right elevation is absolutely essential for good shooting.
+
+EXAMPLE RELEVANT QUERY: What are passages that describe a process where human skill compensates for a lack of mechanical assistance?
+EXAMPLE IRRELEVANT QUERY: What are passages where collaboration between people improves accuracy?
+
+PASSAGE (use this to answer): {}
 
 QUERY: {}
 
-PASSAGE (RAW TEXT): {}
-
-Please answer with yes or no, no other text.
+Is the passage fully relevant to the query? Please answer with yes or no, no other text.
 """
 
 

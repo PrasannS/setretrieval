@@ -526,9 +526,13 @@ class ParallelResponsesClient:
             print(f"Warning: Could not clear cache: {e}")
     
     def close(self):
-        """Close database connections."""
+        """Close database connections, and close the clients."""
         if hasattr(self._local, 'conn'):
             self._local.conn.close()
+        if self.gemini_client:
+            self.gemini_client.close()
+        if self.openai_client:
+            self.openai_client.close()
 
 
 # Example usage
@@ -536,8 +540,8 @@ if __name__ == "__main__":
     # Initialize the client
     client = ParallelResponsesClient(
         max_concurrent=50,  # Can now handle much higher concurrency!
-        cache_db="cache/response_cache.db",
-        log_file="cache/requests_log.jsonl",
+        # cache_db="propercache/cache/response_cache.db",
+        # log_file="propercache/cache/requests_log.jsonl",
         use_cache=True,
         use_vertexai=True
     )
@@ -581,7 +585,7 @@ if __name__ == "__main__":
     ]
     
     gemini_results = client.run(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-pro",
         prompts=gemini_prompts,
         max_output_tokens=100,
         thinking_budget=0
