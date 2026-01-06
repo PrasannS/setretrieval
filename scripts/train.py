@@ -30,6 +30,7 @@ if __name__ == "__main__":
     parser.add_argument("--schedtype", type=str, default="cosine")
     parser.add_argument("--maxchars", type=int, default=5000)
     parser.add_argument("--temp", type=float, default=0.02)
+    parser.add_argument("--api_model", type=str, default="neither")
     args = parser.parse_args()
 
     dataset = DatasetDict.load_from_disk(f"propercache/data/colbert_training/{args.dataset}")
@@ -47,7 +48,7 @@ if __name__ == "__main__":
 
     if args.traintype == "colbert":
         print("Training ColBERT")
-        colbert_train.train_colbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset, div_coeff=args.div_coeff, colscore=args.colscore, querylen=args.querylen, save_strat=args.save_strat, schedtype=args.schedtype, maxchars=maxchars, divq_coeff=args.divq_coeff, temp=args.temp)
+        colbert_train.train_colbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset, div_coeff=args.div_coeff, colscore=args.colscore, querylen=args.querylen, save_strat=args.save_strat, schedtype=args.schedtype, maxchars=maxchars, divq_coeff=args.divq_coeff, temp=args.temp, api_model=args.api_model)
     elif args.traintype == "sbert":
         print("Training SBERT")
         colbert_train.train_sbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset)

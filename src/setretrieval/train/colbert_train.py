@@ -16,7 +16,7 @@ from typing import Iterable
 from torch import Tensor
 import torch.nn.functional as F
 import wandb
-
+import requests
 
 from pylate.models import ColBERT
 from pylate.scores import colbert_scores
@@ -58,7 +58,18 @@ def maxmax_scores(
     return scores
 
 class SetContrastive(nn.Module):
-    def __init__(self, model: ColBERT, score_metric=maxmax_scores, size_average: bool = True, gather_across_devices: bool = False, temperature: float = 1.0, div_coeff: float = 0.0, divq_coeff: int = 0.0, api_model: str = "neither") -> None:
+    def __init__(
+        self, 
+        model: nn.Module, 
+        score_metric=None,
+        size_average: bool = True, 
+        gather_across_devices: bool = False, 
+        temperature: float = 1.0, 
+        div_coeff: float = 0.0, 
+        divq_coeff: float = 0.0, 
+        api_model: str = "neither", # can be "neither", "document", or "query"
+        api_url: str = "http://localhost:5000/embed"
+    ) -> None:
         super(SetContrastive, self).__init__()
         self.score_metric = score_metric
         self.model = model
@@ -67,6 +78,35 @@ class SetContrastive(nn.Module):
         self.temperature = temperature
         self.div_coeff = div_coeff
         self.divq_coeff = divq_coeff
+        self.api_model = api_model
+        self.api_url = api_url
+
+    def _get_embeddings_from_api(self, sentence_feature: dict[str, Tensor]) -> Tensor:
+        """Get embeddings from API endpoint."""
+        # Prepare the request payload
+        payload = {
+            "input_ids": sentence_feature["input_ids"].cpu().numpy().tolist(),
+            "attention_mask": sentence_feature["attention_mask"].cpu().numpy().tolist(),
+        }
+        try:
+            # breakpoint()
+            response = requests.post(self.api_url, json=payload, timeout=30)
+            response.raise_for_status()
+            embeddings_data = response.json()["embeddings"]
+            
+            # Convert back to tensor on the correct device
+            embeddings = torch.tensor(
+                embeddings_data, 
+                dtype=torch.float32, 
+                device=sentence_feature["input_ids"].device
+            )
+            
+            # Normalize embeddings
+            embeddings = F.normalize(embeddings, p=2, dim=-1)
+            
+            return embeddings
+        except Exception as e:
+            raise RuntimeError(f"API call failed: {str(e)}")
 
     def forward(
         self,
@@ -82,9 +122,19 @@ class SetContrastive(nn.Module):
         labels
             The labels for the contrastive loss. Not used in this implementation, but kept for compatibility with Trainer.
         """
-        breakpoint()
+        # breakpoint()
         # TODO set up model isolation
-        embeddings = [torch.nn.functional.normalize(self.model(sentence_feature)["token_embeddings"], p=2, dim=-1) for sentence_feature in sentence_features]
+        if self.api_model == "query":
+            query_embeddings = self._get_embeddings_from_api(sentence_features[0])
+        else:
+            query_embeddings = self.model(sentence_features[0])["token_embeddings"]
+        
+        if self.api_model == "document":
+            document_embeddings = [self._get_embeddings_from_api(sentence_feature) for sentence_feature in sentence_features[1:]]
+        else:
+            document_embeddings = [torch.nn.functional.normalize(self.model(sentence_feature)["token_embeddings"], p=2, dim=-1) for sentence_feature in sentence_features[1:]]
+        
+        embeddings = [query_embeddings, *document_embeddings]
         # handle the model being wrapped in (D)DP and so require to access module first
         skiplist = self.model.skiplist if hasattr(self.model, "skiplist") else self.model.module.skiplist
         do_query_expansion = self.model.do_query_expansion if hasattr(self.model, "do_query_expansion") else self.model.module.do_query_expansion
@@ -169,13 +219,13 @@ class SetContrastive(nn.Module):
         return loss
 
 # dataset should be loaded in first, should have format of [query, positive, negative]
-def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1", div_coeff=0.0, colscore="maxmax", querylen=256, save_strat="epoch", schedtype="constant", maxchars=5000, divq_coeff=0.0, temp=0.02):
+def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1", div_coeff=0.0, colscore="maxmax", querylen=256, save_strat="epoch", schedtype="constant", maxchars=5000, divq_coeff=0.0, temp=0.02, api_model="neither"):
     """Train set retrieval models."""
     train_dataset = train_dataset.map(lambda x: {"positive": x["positive"][:maxchars], "negative": x["negative"][:maxchars]})
     eval_dataset = eval_dataset.map(lambda x: {"positive": x["positive"][:maxchars], "negative": x["negative"][:maxchars]})
 
     # Set the run name for logging and output directory
-    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}-{colscore}-divd{div_coeff}-divq{divq_coeff}-qlen{querylen}-{schedtype}-temp{temp}"
+    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}-{colscore}-divd{div_coeff}-divq{divq_coeff}-qlen{querylen}-{schedtype}-temp{temp}-api{api_model}"
     output_dir = f"propercache/cache/colbert_training/{run_name}"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -184,7 +234,6 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
     # 1. Here we define our ColBERT model. If not a ColBERT model, will add a linear layer to the base encoder.
     model = models.ColBERT(model_name_or_path=base_model, query_length=querylen)
 
-    # Compiling the model makes the training faster
     model = torch.compile(model)
 
     # Define the loss function, there's some gather option as well
@@ -194,7 +243,7 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
         metric = maxmax_scores if colscore == "maxmax" else colbert_scores
         print(f"Using colscore: {metric.__name__} {colscore} as the score metric")
         # train_loss = losses.Contrastive(model=model, temperature=0.02)
-        train_loss = SetContrastive(model=model, temperature=temp, score_metric=metric, div_coeff=div_coeff, divq_coeff=divq_coeff)
+        train_loss = SetContrastive(model=model, temperature=temp, score_metric=metric, div_coeff=div_coeff, divq_coeff=divq_coeff, api_model=api_model)
         if div_coeff == 0.0 and divq_coeff == 0.0 and False:
             print("Using Contrastive loss")
             train_loss = Contrastive(model=model, temperature=temp)
