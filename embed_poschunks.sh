@@ -1,0 +1,4 @@
+# python scripts/embed_testset.py --testset_path propercache/data/evalsets/wikirands100k-wikigemini_tinybigtest --model_path Qwen/Qwen3-Embedding-4B --cachekey qwen4bwiki100ktest
+# python scripts/embed_testset.py --testset_path propercache/data/evalsets/gutterands100k-gutengemini_tinybigtest --model_path Qwen/Qwen3-Embedding-4B --cachekey qwen4bguten100ktest
+# python scripts/embed_testset.py --testset_path propercache/data/evalsets/wikitinytop5k-wikigemini_tinybigtest --model_path Qwen/Qwen3-Embedding-4B --cachekey qwen4bwikitop5ktest
+# python scripts/embed_testset.py --testset_path propercache/data/evalsets/guttinytop5k-gutengemini_tinybigtest --model_path Qwen/Qwen3-Embedding-4B --cachekey qwen4bgutenop5ktest

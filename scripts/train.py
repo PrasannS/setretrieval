@@ -22,12 +22,14 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, default="google-bert/bert-base-uncased")
     parser.add_argument("--traintype", type=str, default="colbert")
     parser.add_argument("--dataset", type=str, default="gemini_datav1")
-    parser.add_argument("--div_coeff", type=float, default=1.0)
+    parser.add_argument("--div_coeff", type=float, default=0.0)
+    parser.add_argument("--divq_coeff", type=float, default=0.0)
     parser.add_argument("--colscore", type=str, default="maxsim")
     parser.add_argument("--querylen", type=int, default=256)
     parser.add_argument("--save_strat", type=str, default="epoch")
     parser.add_argument("--schedtype", type=str, default="cosine")
     parser.add_argument("--maxchars", type=int, default=5000)
+    parser.add_argument("--temp", type=float, default=0.02)
     args = parser.parse_args()
 
     dataset = DatasetDict.load_from_disk(f"propercache/data/colbert_training/{args.dataset}")
@@ -45,7 +47,7 @@ if __name__ == "__main__":
 
     if args.traintype == "colbert":
         print("Training ColBERT")
-        colbert_train.train_colbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset, div_coeff=args.div_coeff, colscore=args.colscore, querylen=args.querylen, save_strat=args.save_strat, schedtype=args.schedtype, maxchars=maxchars)
+        colbert_train.train_colbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset, div_coeff=args.div_coeff, colscore=args.colscore, querylen=args.querylen, save_strat=args.save_strat, schedtype=args.schedtype, maxchars=maxchars, divq_coeff=args.divq_coeff, temp=args.temp)
     elif args.traintype == "sbert":
         print("Training SBERT")
         colbert_train.train_sbert(traindata, evaldata, per_device_batch_size=args.batch_size, num_train_epochs=args.num_epochs, learning_rate=args.learning_rate, base_model=args.model_name, dsetname=args.dataset)

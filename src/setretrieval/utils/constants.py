@@ -24,6 +24,17 @@ QUESTION: {}
 First think step by step, and then at the end answer with 1-3 sentences based on analyzing the note. The format should be: [THINKING] ANSWER: [ANSWER]
 """
 
+comparison_prompt = """ You're given 2 passages (e.g. 2 scientific abstracts, or 2 book passages). Based on reading both carefully, is Passage A related to Passage B in terms of content or concepts?
+
+
+Passage A: {}
+
+
+Passage B: {}
+
+
+It's possible for very different passages to have unexpected connections, but many passages may not be related at all. Generate a 1 sentence explanation, then answer with 'yes' or 'no' at the end."""
+
 decomposed_prompt = """
 You are an expert at analyzing text passages. You are given a passage from a book, and a query, and you need to do 1 of 2 things: 
 1. If the passage may be relevant to the query, generate a brief (1-2 sentence) note specifying and explaining the specific relevant information from the passage.
@@ -59,7 +70,7 @@ Generate a 1 sentence explanation, then answer with 'yes' or 'no' at the end.
 decomposed_prompt_restrictive_oai = """
 You are given a passage and an abstract query. You need to determine if the passage directly meets the criteria of the query. Passages that don't fully match the query should be considered as not relevant. You're given an example below.
 
-EXAMPLE PASSAGE: In the field all guns have to be loaded by hand. The elaborate system of hoists which enables the great naval guns to be loaded with such rapidity is obviously impossible. That has to be compensated for by the gunners themselves, and it is indeed astonishing to see with what deftness they can handle the heavy and dangerous projectiles.With all guns, of whatever kind, range-finding is of the utmost importance. No projectile, however fast it may travel, really moves in a straight line. It must be fired more or less upwards in order to compensate for the downward pull of gravity. If the elevation be insufficient the shell will fall short; if it be too much it may go beyond the mark, or it may fall short, according to circumstances. Just the right elevation is absolutely essential for good shooting.
+EXAMPLE PASSAGE: In the field all guns have to be loaded by hand. The elaborate system of hoists which enables the great naval guns to be loaded with such rapidity is obviously impossible. That has to be compensated for by the gunners themselves, and it is indeed astonishing to see with what deftness they can handle the heavy and dangerous projectiles...
 
 EXAMPLE RELEVANT QUERY: What are passages that describe a process where human skill compensates for a lack of mechanical assistance?
 EXAMPLE IRRELEVANT QUERY: What are passages where collaboration between people improves accuracy?

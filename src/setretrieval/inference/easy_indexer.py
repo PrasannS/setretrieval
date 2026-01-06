@@ -53,10 +53,10 @@ class EasyIndexerBase:
         allres.sort(key=lambda x: x['score'], reverse=reverse)
         return allres
 
-    def index_dataset(self, dset_path):
+    def index_dataset(self, dset_path, redo=False):
         # index datasets based on path to a dataset (with a text column)
         dset = Dataset.load_from_disk(dset_path)
-        self.index_documents(list(dset["text"]), dset_path.replace("/", "_"))
+        self.index_documents(list(dset["text"]), dset_path.replace("/", "_"), redo=redo)
         return dset_path.replace("/", "_")
 
 
@@ -82,9 +82,9 @@ class SingleEasyIndexer(EasyIndexerBase):
         return os.path.exists(os.path.join(self.index_base_path, f"{index_id}.faiss"))
 
     # given documents and an id, either load or search index
-    def index_documents(self, documents, index_id, emb_bsize=64, pre_embeds=None):
+    def index_documents(self, documents, index_id, emb_bsize=64, pre_embeds=None, redo=False):
         os.makedirs(self.index_base_path, exist_ok=True)
-        if self.index_exists(index_id):
+        if self.index_exists(index_id) and redo == False:
             print(f"Index {index_id} already exists")
             return
         assert documents is not None
@@ -113,19 +113,27 @@ class SingleEasyIndexer(EasyIndexerBase):
         self.load_model()
         assert qtype in ['document', 'query'] and (type(documents) == list)
 
-        if "google-bert" in self.model_name:
+        if "google-bert" in self.model_name or "e5-large" in self.model_name or "stella" in self.model_name:
+            print("doing truncation where necessary")
             # tokenize / detokenize to get things less than 510 tokens long
             docs = [self.toker.encode(doc) for doc in documents]
-            docs = [self.toker.decode(doc[:505], skip_special_tokens=True) for doc in docs]
-            documents = docs
+            # print(max([len(d) for d in docs]))
             # breakpoint()
-        
+            docs = [self.toker.decode(doc[:480], skip_special_tokens=True) for doc in docs]
+            documents = docs
+            sanlens = [len(self.toker.encode(doc)) for doc in documents]
+            print("Max num of tokens is ", max(sanlens))
+            # breakpoint()
+            # breakpoint()
+        insmods = ['Qwen', 'intfloat/multilingual-e5-large-instruct', 'NovaSearch/stella_en_1.5B_v5']
+        isinmod = any(ins in self.model_name for ins in insmods)
+        # breakpoint()
         if self.model_name == "nomic-ai/nomic-embed-text-v1":
             # preprocess documents with prefix search_document: 
             documents = [f"search_{qtype}: {doc}" for doc in documents]
-        elif "Qwen" in self.model_name and qtype == "query":
+        elif isinmod and qtype == "query": # TODO I think chat template might be the issue
             documents = [f"Instruct: Find documents, both normal and unexpected, that are relevant to the query.\nQuery: {doc}" for doc in documents]
-        
+
         if self.num_gpus == 0:
             embeddings = self.model.encode(documents, batch_size=1, show_progress_bar=True)
         else:
@@ -235,9 +243,9 @@ class ColBERTEasyIndexer(EasyIndexerBase):
         # breakpoint()
         return os.path.exists(os.path.join(self.index_base_path, index_id, f"fast_plaid_index"))
 
-    def index_documents(self, documents, index_id, pre_embeds=None):
+    def index_documents(self, documents, index_id, pre_embeds=None, redo=False):
         os.makedirs(self.index_base_path, exist_ok=True)
-        if self.index_exists(index_id):
+        if self.index_exists(index_id) and redo == False:
             print(f"Index {index_id} already exists")
             return
 
@@ -246,7 +254,7 @@ class ColBERTEasyIndexer(EasyIndexerBase):
         else:
             embeds = pre_embeds
         print("Adding documents to index")
-        self.indices[index_id] = indexes.PLAID(index_folder=self.index_base_path, index_name=index_id, override=False)
+        self.indices[index_id] = indexes.PLAID(index_folder=self.index_base_path, index_name=index_id, override=True)
         self.indices[index_id].add_documents(documents_ids=[str(i) for i in range(len(documents))], documents_embeddings=embeds)
         self.documents[index_id] = Dataset.from_dict({"text": documents})
         self.documents[index_id].save_to_disk(os.path.join(self.index_base_path, f"{index_id}"))
@@ -268,6 +276,7 @@ class ColBERTEasyIndexer(EasyIndexerBase):
         query_embedding = self.embed_with_multi_gpu(queries, qtype="query") if doembed else np.array(queries)
         retriever = retrieve.ColBERT(index=self.indices[index_id])
         results = retriever.retrieve(queries_embeddings=query_embedding, k=min(k, len(self.documents[index_id])))
+        breakpoint()
         return [[{'score': entry['score'], 'index': int(entry['id']), 'index_id': index_id} for entry in result] for result in results]
 
 

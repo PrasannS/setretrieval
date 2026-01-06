@@ -3,7 +3,7 @@ from setretrieval.inference.easy_indexer import BM25EasyIndexer, ColBERTEasyInde
 import argparse
 from datasets import Dataset
 import os
-from setretrieval.utils.utils import pickdump, pickload
+from setretrieval.utils.utils import pickdump, pickload, check_process_tset, preds_to_chunks
 from statistics import mean
 
 def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precision"):
@@ -22,7 +22,7 @@ def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precisio
     else:
         raise ValueError(f"Invalid metric: {metric}")
 
-def ds_load_indexer(indextype, modelname, datasetpath):
+def ds_load_indexer(indextype, modelname, datasetpath, redo=False):
     if indextype == "bm25":
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
@@ -37,24 +37,25 @@ def ds_load_indexer(indextype, modelname, datasetpath):
         raise ValueError(f"Invalid index type: {indextype}")
 
     # process the dataset in one go, make an index for it
-    index_id = indexer.index_dataset(datasetpath)
+    index_id = indexer.index_dataset(datasetpath, redo=redo)
     return indexer, index_id
 
-def do_eval(indextype, modelname, datasetpath, evalsetpath, k):
+def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no"):
 
     eval_set = Dataset.load_from_disk(evalsetpath)
+    eval_set = check_process_tset(eval_set)
 
-    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath)
+    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes")
     # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
     results = indexer.search(list(eval_set["question"]), index_id, k)
-
 
     # evaluate the results
     metres = {'precision': [], 'recall': [], 'atleastone': []}
     for met in metres.keys():
         metres[met].extend([indexer_eval_row(results[i], eval_set[i]["pos_chunks"], indexer, index_id, met) for i in range(len(results))])
 
-    return metres
+    predictions_chunks = preds_to_chunks(results, indexer.documents[index_id])
+    return metres, predictions_chunks, eval_set['pos_chunks']
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -63,8 +64,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_path", type=str, default="propercache/data/datastores/wikipedia_docs_15k")
     parser.add_argument("--eval_set_path", type=str, default="propercache/data/evalsets/settest_v1_paraphrased")
     parser.add_argument("--k", type=int, default=10)
+    parser.add_argument("--forceredo", type=str, default="no")
+    parser.add_argument("--save_preds", type=str, default="no")
     args = parser.parse_args()
-
 
     print("starting eval")
     
@@ -80,13 +82,15 @@ if __name__ == "__main__":
         metresults = {}
 
     # we have at least 3 metrics
-    if methodkey in metresults and len(metresults[methodkey]) == 3:
+    if methodkey in metresults and len(metresults[methodkey]) == 3 and args.forceredo == "no":
         print(f"Loading results from cache for {resultkey}")
         metres = metresults[methodkey]
     else:
-        metres = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k)
+        metres, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo)
         metresults[methodkey] = metres
         pickdump(metresults, "propercache/cache/setresults/"+resultkey+".pkl")
+        if len(args.save_preds) > 0:
+            pickdump((preds, golds), "propercache/cache/setresults/"+resultkey+"_"+args.save_preds+"_preds.pkl")
 
     print(f"Mean precision: {mean(metres['precision'])}")
     print(f"Mean recall: {mean(metres['recall'])}")

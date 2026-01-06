@@ -1,6 +1,6 @@
 from ..inference.oai_request_client import ParallelResponsesClient, PRICING
 from ..utils.constants import categorize_prompt, conceptual_rephrase_prompt, abstract_questions_prompt, example_abstract_passage, example_abstract_questions
-from ..utils.constants import decomposed_prompt_restrictive_4B, decomposed_prompt_restrictive_8B, decomposed_prompt_restrictive_oai
+from ..utils.constants import decomposed_prompt_restrictive_4B, decomposed_prompt_restrictive_8B, decomposed_prompt_restrictive_oai, comparison_prompt
 from collections import Counter
 from datasets import Dataset
 from ..inference.vllm_wrapper import VLLMWrapper
@@ -101,7 +101,7 @@ def categorize_filter_setdata(querydata, model="gemini-2.5-flash", limit=30000):
 #         vllm_wrapper.delete_model()
 #     return responses_grouped, cost
 
-def possearch_singlestage(prior_positives, queries, model, cache):
+def possearch_singlestage(prior_positives, queries, model, cache, stage, comparison=False, max_s1_pps=1500, temp_minlimit=10000):
 
     # breakpoint()
     # only use the first one for now
@@ -110,7 +110,7 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         allresponses = pickload(cache)
         # breakpoint()
         # some fault tolerance
-        if len(allresponses) > len(prior_positives)-2:
+        if len(allresponses) > min(len(prior_positives)-2, temp_minlimit):
             newresps = []
             for i in range(min(len(allresponses), len(prior_positives))):
                 if len(prior_positives[i]) == 0:
@@ -120,7 +120,16 @@ def possearch_singlestage(prior_positives, queries, model, cache):
             return newresps, 0
     else:
         allresponses = []
+        
+    if stage > 0:
+        for i in range(len(prior_positives)):
+            # don't use ones where we go over max pps
+            if len(prior_positives[i]) > max_s1_pps:
+                prior_positives[i] = []
+    ppcnt = sum([len(pos) == 0 for pos in prior_positives])
+    prior_positives = prior_positives[:ppcnt+temp_minlimit]
     
+    print("Truncated number of prior positives to ", len(prior_positives))
     use_oai = model in PRICING.keys()
     if use_oai:
         print(f"Using OAI model: {model}")
@@ -142,10 +151,17 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     else:
         prompt = decomposed_prompt_restrictive_oai
 
+    if comparison:
+        print("Using comparison prompt, overriding")
+        prompt = comparison_prompt
+
     if len(prior_positives) != len(queries): 
         print("WARNING POSITIVES / QUERY COUNTS DO NOT MATCH")
 
-    # breakpoint()
+    queries = queries[:len(prior_positives)]
+
+    print("TOTAL PRIOR POSITIVES: ", sum([len(pos) for pos in prior_positives]))
+    breakpoint()
     if use_oai:
         # for oai, put all queries together into one big list, then group them together later
         allprompts = []
@@ -157,7 +173,7 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         print("EXAMPLE PROMPT: \n", allprompts[0])
         # breakpoint()
         responses = []
-        # breakpoint()
+        breakpoint()
         for i in range(0, len(allprompts), 5000):
             responses.extend(proc_fct(allprompts[i:i+5000]))
             print("Cost so far: ", oai_client.total_cost)
@@ -174,14 +190,15 @@ def possearch_singlestage(prior_positives, queries, model, cache):
         for i in tqdm(range(len(allresponses), len(prior_positives))):
             prior_posvals = list(prior_positives[i])
             prompts = [prompt.format(queries[i], doc) for doc in prior_posvals]
+            print("EXAMPLE PROMPT: \n", prompts[0])
             responses = proc_fct(prompts)
             # breakpoint()
             responses = ["yes" in response.outputs[0].text.lower().strip() for response in responses]
             print("Num queries relevant to passage: ", sum(responses))
             allresponses.append(responses)
             pickdump(allresponses, cache)
-        
 
+    
 
     cost = 0 if use_oai==False else oai_client.total_cost
     print(f"Total cost: {cost}")
@@ -196,14 +213,15 @@ def possearch_singlestage(prior_positives, queries, model, cache):
     if not use_oai:
         vllm_wrapper.delete_model()
     else:
-        oai_client.close()
+        ""
+        # oai_client.close()
     return newresps, cost
 
 def chunks_to_inds(clist):
     # given list of booleans, return indices where True
     return [i for i, c in enumerate(clist) if c]
 
-def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qwen3-4B", "Qwen/Qwen3-8B", "gemini-2.5-flash", "gemini-2.5-pro"], actualpassages=None, cache="propercache/cache/gendata/"):
+def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qwen3-4B", "Qwen/Qwen3-8B", "gemini-2.5-flash", "gemini-2.5-pro"], actualpassages=None, cache="propercache/cache/gendata/", comparison=False, max_s1_pps=1500, temp_minlimit=10000):
     # initialize loop, in gutenberg / other custom cases we can also pass in large loops to begin with
     if type(passages[0]) is not list:
         print("Using the same passage set for all questions.")
@@ -226,7 +244,7 @@ def hierarchical_positive_search(passages, questions, cachekey, models=["Qwen/Qw
             previouspasses = [actualpassages[ind] for ind in selectresults[models[i]]['keep_indices']]
             cost = selectresults[models[i]]['cost']
         else:
-            currentpasses, cost = possearch_singlestage(previouspasses, questions, models[i], cache+f"{cachekey}_{i}.pkl")
+            currentpasses, cost = possearch_singlestage(previouspasses, questions, models[i], cache+f"{cachekey}_{i}.pkl", i, comparison=comparison, max_s1_pps=max_s1_pps, temp_minlimit=temp_minlimit)
             print(f"Stage {i} cost: {cost}")
             # breakpoint()
             # save to use later

@@ -14,13 +14,11 @@ from google import genai
 from google.genai import types
 from google.genai.types import HttpOptions
 
-# Pricing per 1M tokens (update these based on current pricing)
+# Pricing per 1M tokens
 PRICING = {
-    # OpenAI models
     "gpt-5": {"input": 1.25, "output": 10.00},
     "gpt-5-mini": {"input": 0.25, "output": 2.00},
     "gpt-5-nano": {"input": 0.05, "output": 0.40},
-    # Gemini models (example pricing - update with actual pricing)
     "gemini-2.5-flash": {"input": 0.3, "output": 2.5},
     "gemini-2.5-pro": {"input": 1.25, "output": 10.0},
     "gemini-2.5-flash-lite": {"input": 0.1, "output": 0.4},
@@ -30,8 +28,7 @@ PRICING = {
 class ParallelResponsesClient:
     """
     Fast, parallel client for OpenAI and Gemini APIs with SQLite caching and logging.
-    Handles multiple prompts concurrently with configurable limits.
-    Supports both OpenAI (GPT) and Google (Gemini) models.
+    Uses a persistent event loop to avoid loop closure issues.
     """
 
     def load_oai_key(self, keypath="/accounts/projects/sewonm/prasann/oaikey.sh"):
@@ -40,11 +37,9 @@ class ParallelResponsesClient:
         return key
 
     def _is_gemini_model(self, model: str) -> bool:
-        """Check if model is a Gemini model."""
         return model.startswith("gemini")
     
     def _is_openai_model(self, model: str) -> bool:
-        """Check if model is an OpenAI model."""
         return model.startswith("gpt")
     
     def __init__(
@@ -56,30 +51,31 @@ class ParallelResponsesClient:
         openai_key_path: Optional[str] = None,
         use_vertexai: bool = True
     ):
-        
-        # Initialize OpenAI client
-        if openai_key_path:
-            self.openai_client = AsyncOpenAI(api_key=self.load_oai_key(openai_key_path))
-        else:
-            self.openai_client = AsyncOpenAI()  # Will use OPENAI_API_KEY env var
-        
-        # Initialize Gemini ASYNC client
-        self.gemini_client = None
-        os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = str(use_vertexai).lower()
-        # Use the async client instead of synchronous
-        self.gemini_client = genai.Client(
-            http_options=HttpOptions(api_version="v1"),
-            vertexai=use_vertexai
-        )
-        
         self.max_concurrent = max_concurrent
-        self.semaphore = asyncio.Semaphore(max_concurrent)
         self.cache_db = Path(cache_db)
         self.log_file = Path(log_file)
         self.use_cache = use_cache
         self.total_cost = 0.0
         self.cache_hits = 0
         self.api_calls = 0
+        self.openai_key_path = openai_key_path
+        self.use_vertexai = use_vertexai
+        
+        # Store API key for OpenAI
+        if openai_key_path:
+            self.openai_api_key = self.load_oai_key(openai_key_path)
+        else:
+            self.openai_api_key = None
+        
+        # Set Gemini environment
+        os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = str(use_vertexai).lower()
+        
+        # Persistent event loop and clients
+        self._loop = None
+        self._loop_thread = None
+        self.openai_client = None
+        self.gemini_client = None
+        self.semaphore = None
         
         # Thread-local storage for database connections
         self._local = threading.local()
@@ -87,6 +83,37 @@ class ParallelResponsesClient:
         # Initialize database
         if self.use_cache:
             self._init_db()
+        
+        # Start the event loop in a background thread
+        self._start_event_loop()
+    
+    def _start_event_loop(self):
+        """Start a persistent event loop in a background thread."""
+        def run_loop(loop):
+            asyncio.set_event_loop(loop)
+            loop.run_forever()
+        
+        self._loop = asyncio.new_event_loop()
+        self._loop_thread = threading.Thread(target=run_loop, args=(self._loop,), daemon=True)
+        self._loop_thread.start()
+        
+        # Initialize clients in the event loop
+        future = asyncio.run_coroutine_threadsafe(self._initialize_clients(), self._loop)
+        future.result()  # Wait for initialization
+    
+    async def _initialize_clients(self):
+        """Initialize API clients in the event loop."""
+        if self.openai_api_key:
+            self.openai_client = AsyncOpenAI(api_key=self.openai_api_key)
+        else:
+            self.openai_client = AsyncOpenAI()
+        
+        self.gemini_client = genai.Client(
+            http_options=HttpOptions(api_version="v1"),
+            vertexai=self.use_vertexai
+        )
+        
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
     
     def _get_connection(self) -> sqlite3.Connection:
         """Get thread-local database connection."""
@@ -102,7 +129,6 @@ class ParallelResponsesClient:
         conn = sqlite3.connect(str(self.cache_db))
         cursor = conn.cursor()
         
-        # Create cache table with indexed cache_key
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS response_cache (
                 cache_key TEXT PRIMARY KEY,
@@ -121,12 +147,10 @@ class ParallelResponsesClient:
             )
         ''')
         
-        # Create index on cache_key for faster lookups (though PRIMARY KEY already indexes)
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_cache_key ON response_cache(cache_key)
         ''')
         
-        # Create index on created_at for potential time-based queries
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_created_at ON response_cache(created_at)
         ''')
@@ -226,7 +250,6 @@ class ParallelResponsesClient:
     def _calculate_cost(self, input_tokens: int, output_tokens: int, model: str) -> float:
         """Calculate the cost of a request in USD."""
         pricing = PRICING[model]
-        
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
         return input_cost + output_cost
@@ -257,13 +280,12 @@ class ParallelResponsesClient:
         prompt: str,
         temperature: Optional[float] = None,
         max_output_tokens: Optional[int] = None,
-        reasoning: Optional[str] = "minimal", # For OpenAI: "minimal", "low", "high", "maximal"
-        thinking_budget: Optional[int] = 0,    # For Gemini: thinking budget (0 disables thinking)
+        reasoning: Optional[str] = "minimal",
+        thinking_budget: Optional[int] = 0,
         **kwargs
     ) -> Dict[str, Any]:
         assert model in PRICING, f"Model {model} not found in pricing"
 
-        # Check cache
         cache_key = self._get_cache_key(model, prompt, temperature, max_output_tokens, reasoning=reasoning, thinking_budget=thinking_budget, **kwargs)
         
         cached_result = self._get_cached_response(cache_key)
@@ -272,12 +294,10 @@ class ParallelResponsesClient:
             self._log_request(cached_result, cached=True, model=model)
             return cached_result
         
-        # Make API call
         async with self.semaphore:
             try:
                 self.api_calls += 1
                 
-                # Determine which API to use
                 if self._is_openai_model(model):
                     result = await self._get_openai_completion(
                         model, prompt, temperature, max_output_tokens, reasoning, **kwargs
@@ -287,11 +307,9 @@ class ParallelResponsesClient:
                         model, prompt, temperature, max_output_tokens, thinking_budget, **kwargs
                     )
                 else:
-                    raise ValueError(f"Unknown model type: {model}. Model must start with 'gpt' or 'gemini'")
+                    raise ValueError(f"Unknown model type: {model}")
                 
-                # Cache the result
                 self._save_to_cache(cache_key, result, temperature, max_output_tokens)
-                
                 self._log_request(result, cached=False, model=model)
                 return result
                 
@@ -329,7 +347,6 @@ class ParallelResponsesClient:
             **kwargs
         )
         
-        # Calculate cost
         cost = self._calculate_cost(
             response.usage.input_tokens,
             response.usage.output_tokens,
@@ -361,36 +378,31 @@ class ParallelResponsesClient:
         thinking_budget: int,
         **kwargs
     ) -> Dict[str, Any]:
-        """Get completion from Gemini API using async client."""
+        """Get completion from Gemini API."""
         if not self.gemini_client:
             raise ValueError("Gemini client not initialized")
         
-        # Build config
         config_params = {}
         if temperature is not None:
             config_params["temperature"] = temperature
         if max_output_tokens is not None:
             config_params["max_output_tokens"] = max_output_tokens
         
-        # Add thinking config
         config_params["thinking_config"] = types.ThinkingConfig(thinking_budget=thinking_budget)
-        
+        config_params["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(disable=True)
         config = types.GenerateContentConfig(**config_params)
         
-        # Use async API call directly - no threads needed!
         response = await self.gemini_client.aio.models.generate_content(
             model=model,
             contents=prompt,
             config=config
         )
         
-        # Extract token usage from response
         usage_metadata = response.usage_metadata
         input_tokens = usage_metadata.prompt_token_count
-        output_tokens = usage_metadata.candidates_token_count
+        output_tokens = usage_metadata.total_token_count - usage_metadata.prompt_token_count
         total_tokens = usage_metadata.total_token_count
         
-        # Calculate cost
         cost = self._calculate_cost(input_tokens, output_tokens, model)
         self.total_cost += cost
         
@@ -409,30 +421,26 @@ class ParallelResponsesClient:
             "cached": False
         }
     
-    
     async def get_completions(
         self,
         model: str,
         prompts: List[str],
         temperature: float = 1.0,
         max_output_tokens: Optional[int] = None,
-        reasoning: Optional[str] = "minimal",      # For OpenAI
-        thinking_budget: Optional[int] = 0,         # For Gemini
+        reasoning: Optional[str] = "minimal",
+        thinking_budget: Optional[int] = 0,
         show_progress: bool = True,
         **kwargs
     ) -> List[Dict[str, Any]]:
         
-        # Create tasks with their original indices to maintain order
         indexed_tasks = [
             (i, self.get_completion(model, prompt, temperature, max_output_tokens, reasoning, thinking_budget, **kwargs))
             for i, prompt in enumerate(prompts)
         ]
         
-        # Create progress bar
         if show_progress:
             pbar = tqdm(total=len(prompts), desc="Processing prompts", unit="prompt")
         
-        # Store results with their indices
         indexed_results = []
         for coro in asyncio.as_completed([task for _, task in indexed_tasks]):
             result = await coro
@@ -443,8 +451,6 @@ class ParallelResponsesClient:
         if show_progress:
             pbar.close()
         
-        # Match results back to their original indices
-        # Build a map from prompt to list of results (handles duplicates)
         result_lists = {}
         for result in indexed_results:
             prompt = result['prompt']
@@ -452,7 +458,6 @@ class ParallelResponsesClient:
                 result_lists[prompt] = []
             result_lists[prompt].append(result)
         
-        # Reconstruct in original order, popping from lists for duplicates
         results = []
         for prompt in prompts:
             results.append(result_lists[prompt].pop(0))
@@ -465,31 +470,21 @@ class ParallelResponsesClient:
         prompts: List[str],
         temperature: float = 1.0,
         max_output_tokens: Optional[int] = None,
-        reasoning: Optional[str] = "minimal",      # For OpenAI: "minimal", "low", "high", "maximal"
-        thinking_budget: Optional[int] = 0,         # For Gemini: thinking budget
+        reasoning: Optional[str] = "minimal",
+        thinking_budget: Optional[int] = 0,
         **kwargs
     ) -> List[Dict[str, Any]]:
-        """
-        Synchronous wrapper for getting completions.
-        
-        Args:
-            model: Model name (e.g., "gpt-5-nano" or "gemini-2.5-flash")
-            prompts: List of prompt texts
-            temperature: Sampling temperature
-            max_output_tokens: Maximum tokens in response
-            reasoning: For OpenAI models - reasoning effort level
-            thinking_budget: For Gemini models - thinking budget (0 disables)
-            **kwargs: Additional parameters for the API
-            
-        Returns:
-            List of dicts containing responses, metadata, and costs
-        """
-        if model=="gemini-2.5-pro" or model=="gemini-3-pro-preview":
+        """Synchronous wrapper for getting completions using persistent event loop."""
+        if model == "gemini-2.5-pro" or model == "gemini-3-pro-preview":
             thinking_budget = max(thinking_budget, 128)
-        self.semaphore = asyncio.Semaphore(self.max_concurrent)
-        return asyncio.run(
-            self.get_completions(model, prompts, temperature, max_output_tokens, reasoning, thinking_budget, **kwargs)
+        
+        # Submit to the persistent event loop
+        future = asyncio.run_coroutine_threadsafe(
+            self.get_completions(model, prompts, temperature, max_output_tokens, reasoning, thinking_budget, **kwargs),
+            self._loop
         )
+        
+        return future.result()
     
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about cache usage and costs."""
@@ -526,14 +521,33 @@ class ParallelResponsesClient:
             print(f"Warning: Could not clear cache: {e}")
     
     def close(self):
-        """Close database connections, and close the clients."""
+        """Close database connections, API clients, and stop the event loop."""
+        # Close clients in the event loop
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self._close_clients_async(), self._loop)
+            try:
+                future.result(timeout=5)
+            except Exception as e:
+                print(f"Warning: Could not close clients: {e}")
+        
+        # Stop the event loop
+        if self._loop:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        
+        # Close database connection
         if hasattr(self._local, 'conn'):
-            self._local.conn.close()
+            try:
+                self._local.conn.close()
+            except Exception as e:
+                print(f"Warning: Could not close database connection: {e}")
+    
+    async def _close_clients_async(self):
+        """Close API clients asynchronously."""
+        if self.openai_client:
+            await self.openai_client.close()
+        
         if self.gemini_client:
             self.gemini_client.close()
-        if self.openai_client:
-            self.openai_client.close()
-
 
 # Example usage
 if __name__ == "__main__":
@@ -579,9 +593,9 @@ if __name__ == "__main__":
     print("=" * 60)
     
     gemini_prompts = [
-        "What is machine learning?",
-        "Explain neural networks briefly.",
-        "What are transformers in AI?",
+        "Answer yes or no, no  other text: Is india's capital delhi? ",
+        "Answer yes or no, no  other text: Is france's capital paris? ",
+        "Answer yes or no, no  other text: Is china's capital beijing? ",
     ]
     
     gemini_results = client.run(
@@ -596,6 +610,7 @@ if __name__ == "__main__":
         if result["success"]:
             print(f"\nGemini Prompt {i}{cached_label}: {result['prompt']}")
             print(f"Response: {result['response']}")
+            print(f"Usage: {result['usage']}")
             print(f"Cost: ${result['cost_usd']:.6f}")
         else:
             print(f"\nGemini Prompt {i} failed: {result['error']}")

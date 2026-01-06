@@ -15,6 +15,8 @@ import torch.nn as nn
 from typing import Iterable
 from torch import Tensor
 import torch.nn.functional as F
+import wandb
+
 
 from pylate.models import ColBERT
 from pylate.scores import colbert_scores
@@ -33,7 +35,7 @@ def maxmax_scores(
     queries_mask: torch.Tensor = None,
     documents_mask: torch.Tensor = None,
 ) -> torch.Tensor:
-    print("Using maxmax_scores!")
+    # print("Using maxmax_scores!")
 
     queries_embeddings = convert_to_tensor(queries_embeddings)
     documents_embeddings = convert_to_tensor(documents_embeddings)
@@ -56,8 +58,7 @@ def maxmax_scores(
     return scores
 
 class SetContrastive(nn.Module):
-
-    def __init__(self, model: ColBERT, score_metric=maxmax_scores, size_average: bool = True, gather_across_devices: bool = False, temperature: float = 1.0, div_coeff: float = 1.0) -> None:
+    def __init__(self, model: ColBERT, score_metric=maxmax_scores, size_average: bool = True, gather_across_devices: bool = False, temperature: float = 1.0, div_coeff: float = 0.0, divq_coeff: int = 0.0, api_model: str = "neither") -> None:
         super(SetContrastive, self).__init__()
         self.score_metric = score_metric
         self.model = model
@@ -65,6 +66,7 @@ class SetContrastive(nn.Module):
         self.gather_across_devices = gather_across_devices
         self.temperature = temperature
         self.div_coeff = div_coeff
+        self.divq_coeff = divq_coeff
 
     def forward(
         self,
@@ -80,8 +82,8 @@ class SetContrastive(nn.Module):
         labels
             The labels for the contrastive loss. Not used in this implementation, but kept for compatibility with Trainer.
         """
-
-        # breakpoint()
+        breakpoint()
+        # TODO set up model isolation
         embeddings = [torch.nn.functional.normalize(self.model(sentence_feature)["token_embeddings"], p=2, dim=-1) for sentence_feature in sentence_features]
         # handle the model being wrapped in (D)DP and so require to access module first
         skiplist = self.model.skiplist if hasattr(self.model, "skiplist") else self.model.module.skiplist
@@ -90,6 +92,8 @@ class SetContrastive(nn.Module):
         batch_size = embeddings[0].size(0)
         # create corresponding labels
         labels = torch.arange(0, batch_size, device=embeddings[0].device)
+
+        # breakpoint()
 
         # breakpoint()
         # Possibly gather the embeddings across devices to have more in-batch negatives.
@@ -137,16 +141,23 @@ class SetContrastive(nn.Module):
         )
 
         # breakpoint()
-
         # compute constrastive loss using cross-entropy over the scores
         loss = F.cross_entropy(
             input=scores / self.temperature,
             target=labels,
             reduction="mean" if self.size_average else "sum",
         )
+        divloss = self.divq_coeff * (avg_pairwise_simq.mean()) + self.div_coeff * (avg_pairwise_simd.mean())
+        loss += divloss
+
+        if wandb.run is not None and (not self.gather_across_devices or get_rank() == 0):  # Check if wandb is initialized
+            wandb.log({
+                "train/avg_pairwise_simq": avg_pairwise_simq.mean().item(),
+                "train/avg_pairwise_simd": avg_pairwise_simd.mean().item(),
+                "train/diversity_loss": divloss.item(),
+            })
 
         # add loss for average pairwise cosine similarity of embeddings between themselves
-        loss += self.div_coeff * (avg_pairwise_simq.mean() + avg_pairwise_simd.mean())
 
         # TODO log this in wandb
 
@@ -157,16 +168,14 @@ class SetContrastive(nn.Module):
             loss *= get_world_size()
         return loss
 
-
 # dataset should be loaded in first, should have format of [query, positive, negative]
-def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1", div_coeff=1.0, colscore="maxmax", querylen=256, save_strat="epoch", schedtype="constant", maxchars=5000):
+def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-uncased", mini_batch_size=32, per_device_batch_size=1000, num_train_epochs=3, learning_rate=3e-6, dsetname="gemini_datav1", div_coeff=0.0, colscore="maxmax", querylen=256, save_strat="epoch", schedtype="constant", maxchars=5000, divq_coeff=0.0, temp=0.02):
     """Train set retrieval models."""
     train_dataset = train_dataset.map(lambda x: {"positive": x["positive"][:maxchars], "negative": x["negative"][:maxchars]})
     eval_dataset = eval_dataset.map(lambda x: {"positive": x["positive"][:maxchars], "negative": x["negative"][:maxchars]})
 
-
     # Set the run name for logging and output directory
-    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}-{colscore}-div{div_coeff}-qlen{querylen}-{schedtype}"
+    run_name = f"contrastive-{base_model.replace('/', '_')}-bs{per_device_batch_size}-e{num_train_epochs}-lr{learning_rate}-{dsetname}-{colscore}-divd{div_coeff}-divq{divq_coeff}-qlen{querylen}-{schedtype}-temp{temp}"
     output_dir = f"propercache/cache/colbert_training/{run_name}"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -185,7 +194,10 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
         metric = maxmax_scores if colscore == "maxmax" else colbert_scores
         print(f"Using colscore: {metric.__name__} {colscore} as the score metric")
         # train_loss = losses.Contrastive(model=model, temperature=0.02)
-        train_loss = SetContrastive(model=model, temperature=0.02, score_metric=metric, div_coeff=div_coeff)
+        train_loss = SetContrastive(model=model, temperature=temp, score_metric=metric, div_coeff=div_coeff, divq_coeff=divq_coeff)
+        if div_coeff == 0.0 and divq_coeff == 0.0 and False:
+            print("Using Contrastive loss")
+            train_loss = Contrastive(model=model, temperature=temp)
 
     # Initialize the evaluator
     dev_evaluator = evaluation.ColBERTTripletEvaluator(
@@ -210,6 +222,7 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
         lr_scheduler_type=schedtype,
         save_only_model=True,
         save_strategy=save_strat,
+        logging_steps=50,
         # deepspeed="dsconfig.json",
     )
 

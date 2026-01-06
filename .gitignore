@@ -10,7 +10,7 @@ wandb/
 data/
 
 *.out
-
+*.err
 # C extensions
 *.so
 
