@@ -13,9 +13,14 @@ def passages_to_questions(passages, model="gemini-2.5-pro", pfunct=lambda x: abs
     oai_request_client = ParallelResponsesClient(max_concurrent=100)
 
     # get abstract questions with the prompt
-    passagetexts = [passage['text'].replace("\n", " ") for passage in passages]
-    abstract_questions_prompts = [pfunct(passage) for passage in passagetexts]
-    abstract_questions_responses = oai_request_client.run(model=model, prompts=abstract_questions_prompts)
+    passagetexts = [passage['text'].replace("\n", " ") for passage in tqdm(passages)]
+    abstract_questions_prompts = [pfunct(passage) for passage in tqdm(passagetexts)]
+
+    allres = []
+    for i in tqdm(range(0, len(abstract_questions_prompts), 5000)):
+        allres.extend(oai_request_client.run(model=model, prompts=abstract_questions_prompts[i:i+5000]))
+        print("Cost so far: ", oai_request_client.total_cost)
+    abstract_questions_responses = allres
     
     results = []
     for i, passage in enumerate(passages):

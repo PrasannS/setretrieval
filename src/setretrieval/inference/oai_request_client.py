@@ -29,6 +29,7 @@ class ParallelResponsesClient:
     """
     Fast, parallel client for OpenAI and Gemini APIs with SQLite caching and logging.
     Uses a persistent event loop to avoid loop closure issues.
+    Includes retry logic for 429 rate limit errors.
     """
 
     def load_oai_key(self, keypath="/accounts/projects/sewonm/prasann/oaikey.sh"):
@@ -49,7 +50,9 @@ class ParallelResponsesClient:
         log_file: str = "propercache/cache/requests_log.jsonl",
         use_cache: bool = True,
         openai_key_path: Optional[str] = None,
-        use_vertexai: bool = True
+        use_vertexai: bool = True,
+        max_retries: int = 5,
+        initial_retry_delay: float = 0.1
     ):
         self.max_concurrent = max_concurrent
         self.cache_db = Path(cache_db)
@@ -60,6 +63,8 @@ class ParallelResponsesClient:
         self.api_calls = 0
         self.openai_key_path = openai_key_path
         self.use_vertexai = use_vertexai
+        self.max_retries = max_retries
+        self.initial_retry_delay = initial_retry_delay
         
         # Store API key for OpenAI
         if openai_key_path:
@@ -274,6 +279,11 @@ class ParallelResponsesClient:
         except Exception as e:
             print(f"Warning: Could not write to log file: {e}")
     
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """Check if an error is a rate limit (429) error."""
+        error_str = str(error).lower()
+        return "429" in error_str or "rate limit" in error_str or "quota" in error_str
+    
     async def get_completion(
         self,
         model: str,
@@ -295,38 +305,58 @@ class ParallelResponsesClient:
             return cached_result
         
         async with self.semaphore:
-            try:
-                self.api_calls += 1
-                
-                if self._is_openai_model(model):
-                    result = await self._get_openai_completion(
-                        model, prompt, temperature, max_output_tokens, reasoning, **kwargs
-                    )
-                elif self._is_gemini_model(model):
-                    result = await self._get_gemini_completion(
-                        model, prompt, temperature, max_output_tokens, thinking_budget, **kwargs
-                    )
-                else:
-                    raise ValueError(f"Unknown model type: {model}")
-                
-                self._save_to_cache(cache_key, result, temperature, max_output_tokens)
-                self._log_request(result, cached=False, model=model)
-                return result
-                
-            except Exception as e:
-                result = {
-                    "model": model,
-                    "prompt": prompt,
-                    "response": None,
-                    "usage": None,
-                    "cost_usd": 0.0,
-                    "success": False,
-                    "error": str(e),
-                    "cached": False
-                }
-                print(f"Error: {e}")
-                self._log_request(result, cached=False, model=model)
-                return result
+            retry_count = 0
+            last_error = None
+            
+            while retry_count <= self.max_retries:
+                try:
+                    self.api_calls += 1
+                    
+                    if self._is_openai_model(model):
+                        result = await self._get_openai_completion(
+                            model, prompt, temperature, max_output_tokens, reasoning, **kwargs
+                        )
+                    elif self._is_gemini_model(model):
+                        result = await self._get_gemini_completion(
+                            model, prompt, temperature, max_output_tokens, thinking_budget, **kwargs
+                        )
+                    else:
+                        raise ValueError(f"Unknown model type: {model}")
+                    
+                    self._save_to_cache(cache_key, result, temperature, max_output_tokens)
+                    self._log_request(result, cached=False, model=model)
+                    return result
+                    
+                except Exception as e:
+                    last_error = e
+                    
+                    # Check if it's a rate limit error
+                    if self._is_rate_limit_error(e):
+                        retry_count += 1
+                        if retry_count <= self.max_retries:
+                            # Exponential backoff: 0.1, 0.2, 0.4, 0.8, 1.6 seconds
+                            delay = self.initial_retry_delay * (2 ** (retry_count - 1))
+                            print(f"Rate limit hit for {model}. Retrying in {delay:.2f}s (attempt {retry_count}/{self.max_retries})...")
+                            await asyncio.sleep(delay)
+                            continue
+                    
+                    # If not a rate limit error, or max retries exceeded, break
+                    break
+            
+            # If we get here, all retries failed
+            result = {
+                "model": model,
+                "prompt": prompt,
+                "response": None,
+                "usage": None,
+                "cost_usd": 0.0,
+                "success": False,
+                "error": str(last_error),
+                "cached": False
+            }
+            print(f"Error after {retry_count} retries: {last_error}")
+            self._log_request(result, cached=False, model=model)
+            return result
     
     async def _get_openai_completion(
         self,
@@ -551,13 +581,13 @@ class ParallelResponsesClient:
 
 # Example usage
 if __name__ == "__main__":
-    # Initialize the client
+    # Initialize the client with retry settings
     client = ParallelResponsesClient(
-        max_concurrent=50,  # Can now handle much higher concurrency!
-        # cache_db="propercache/cache/response_cache.db",
-        # log_file="propercache/cache/requests_log.jsonl",
+        max_concurrent=50,
         use_cache=True,
-        use_vertexai=True
+        use_vertexai=True,
+        max_retries=5,  # Maximum number of retries for 429 errors
+        initial_retry_delay=0.1  # Initial delay in seconds
     )
     
     # Example with OpenAI models
@@ -587,7 +617,7 @@ if __name__ == "__main__":
         else:
             print(f"\nGPT Prompt {i} failed: {result['error']}")
     
-    # Example with Gemini models (now much faster!)
+    # Example with Gemini models
     print("\n" + "=" * 60)
     print("Testing Google Gemini models...")
     print("=" * 60)

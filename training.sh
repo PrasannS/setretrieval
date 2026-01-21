@@ -135,5 +135,74 @@
 
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "NovaSearch/stella_en_1.5B_v5" --traintype "colbert" --dataset "gemini_gutenbergtrain" --querylen 32 --divq_coeff 0.0 --div_coeff 0 --temp 0.05
 
-torchrun --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2.1e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "wiki1gramtrain50000samplebalancedcontam" --querylen 32 --divq_coeff 0.0 --div_coeff 0 --temp 0.5
+# torchrun --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2.1e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "wiki1gramtrain50000samplebalancedcontam" --querylen 32 --divq_coeff 0.0 --div_coeff 0 --temp 0.5
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "wiki2gramtrain50000samples" --querylen 32 --divq_coeff 0.0 --div_coeff 0 --temp 0.05
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "wiki2gramtrain50000samples" --querylen 32 --divq_coeff 0.0 --div_coeff 0 --temp 0.05
+
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 3e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "v2nountraining50words100000ndps1" --querylen 50 --divq_coeff 0.0 --temp 0.5
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 1 --dataset "v2nountraining50words100000ndps1" --div_coeff 0 --temp 0.02 --doclen 2 --querylen 50
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --dataset "wiki2gramtrain50000samples" --querylen 1 --divq_coeff 0.0 --div_coeff 0 --temp 0.5
+
+
+# torchrun --nproc_per_node=4 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "v2nountrain100000rand150dwords" --div_coeff 0 --temp 0.5 --doclen 512 --querylen 8 --dodefaulttrain "yes"
+
+# train on 4 realistic sets (wiki, guten, bio, phys)
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 1 --dataset "abstract_relevant_train_30k_newfilt" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 1 --dataset "gemini_gutenbergtrain" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 1 --dataset "gemini_ntrain_ptest" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 1 --dataset "gemini_abstracttrain" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 0 --dataset "fineweb_gmini_300k" --div_coeff 0 --temp 1 --doclen 511 --querylen 48 --dodefaulttrain "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 1e-6 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_300k" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_30k" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_90k" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_30k_nosame" --div_coeff 0 --temp 0.02 --doclen 511 --querylen 32 --dodefaulttrain "yes"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_30k_nosame" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 1 --dodefaulttrain "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_30k_nosame" --div_coeff 0 --temp 0.02 --doclen 100 --querylen 1 --dodefaulttrain "no"
+
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "intfloat/multilingual-e5-large-instruct" --traintype "colbert" --divq_coeff 0 --dataset "gutenbergnoshuff_gmini_300k" --div_coeff 0 --temp 1 --doclen 511 --querylen 48 --dodefaulttrain "no"
+
+# torchrun --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "train1wordsdebug100" --div_coeff 0 --temp 1 --doclen 5 --querylen 5 --dodefaulttrain "no" --compile "no" --save_strat "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "v2nountrain100000rand10dwords" --div_coeff 0 --temp 0.5 --doclen 10 --querylen 1 --dodefaulttrain "no" --compile "yes" --save_strat "no"
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "v2nountrain100000rand10dwords" --div_coeff 0 --temp 0.5 --doclen 10 --querylen 10 --dodefaulttrain "no" --compile "yes" --save_strat "no"
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "v2nountrain100000rand10dwords" --div_coeff 0 --temp 0.5 --doclen 20 --querylen 1 --dodefaulttrain "no" --compile "yes" --save_strat "no"
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 4 --num_epochs 10 --learning_rate 2e-5 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "train1wordsdebug100" --div_coeff 0 --temp 1 --doclen 5 --querylen 5 --dodefaulttrain "no" --compile "no" --save_strat "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 5e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "v2nountrain100000rand10dwords" --div_coeff 0 --temp 0.02 --doclen 10 --querylen 32 --dodefaulttrain "no" --compile "yes" --save_strat "no"
+
+
+# torchrun --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 10 --learning_rate 2e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "train1wordsdebug100" --div_coeff 0 --temp 1 --doclen 5 --querylen 5 --dodefaulttrain "no" --compile "no" --save_strat "no"
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 4 --num_epochs 3 --learning_rate 2e-5 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "train1wordsdebug100" --div_coeff 0 --temp 1 --doclen 5 --querylen 5 --dodefaulttrain "no" --compile "no" --save_strat "no" #--lora_rank 32
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "gutenberg_gmini_30k_nosame" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 100 --dodefaulttrain "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 2e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 1 --dataset "v2nountraining50words100000ndps1" --div_coeff 0 --temp 0.02 --doclen 10 --querylen 100 --dodefaulttrain "yes" --embsize 128 --compile "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 8e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "v2nountrain100000rand50dwords" --div_coeff 1 --temp 0.02 --doclen 100 --querylen 8 --dodefaulttrain "yes" --embsize 128 --compile "no"
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 5 --learning_rate 5e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "train50wordsdebug100setversion" --div_coeff 0 --temp 1 --doclen 4 --querylen 50 --dodefaulttrain "no" --compile "no" --save_strat "no" --colscore "multipos" #--lora_rank 32
+
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 5 --learning_rate 5e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "10dworddebug100setversion" --div_coeff 1 --temp 0.02 --doclen 20 --querylen 1 --dodefaulttrain "no" --compile "no" --save_strat "no" --colscore "multiquery" #--lora_rank 32
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 5 --learning_rate 5e-5 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "train50wordsdebug100setversion" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 50 --dodefaulttrain "no" --compile "no" --save_strat "no" --colscore "multipos" #--lora_rank 32
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 5e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "mathtask1_expr2num_min0_max5000_md0_0_hardneg0.0_trainingsize100000" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 1 --dodefaulttrain "no" --embsize 8 --compile "no"

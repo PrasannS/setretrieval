@@ -19,6 +19,8 @@ def pickload(path):
 def check_process_tset_mini(tset):
     if type(tset['pos_chunks'][0]) == dict:
         tset['pos_chunks'] = [r['text'] for r in tset['pos_chunks']]
+    if type(tset['question']) == dict:
+        tset['question'] = tset['question']['text']
     return tset
 
 def check_process_tset(tset):

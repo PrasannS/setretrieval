@@ -1,15 +1,15 @@
 from tqdm import tqdm
 
 # filtering function to get rid of weird chunks in project gutenberg data
-def filter_docdata(row, col='text'):
+def filter_guten_docdata(row, col='text'):
     if 'eBook' in row[col] or row[col].count("|") > 5 or "                       " in row[col]: 
         return False
     if " the " not in row[col] or "The " not in row[col] or "Gutenberg" in row[col] or "electronic" in row[col]: 
         return False
     if row[col].count("--") > 3:
         return False
-    if 'id' in row and row['id'] > 800:
-        return False
+    # if 'id' in row: # HACK used to have > 800 filter
+    #     return False
     return True
 
 # function to get indices of dataset which meet some criteria

@@ -5,6 +5,7 @@ from datasets import Dataset
 import os
 from setretrieval.utils.utils import pickdump, pickload, check_process_tset, preds_to_chunks
 from statistics import mean
+import json
 
 def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precision"):
 
@@ -22,11 +23,11 @@ def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precisio
     else:
         raise ValueError(f"Invalid metric: {metric}")
 
-def ds_load_indexer(indextype, modelname, datasetpath, redo=False):
+def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=None, qvecs=-1, dvecs=-1, ebsize=128, usefast="yes"):
     if indextype == "bm25":
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
-        indexer = ColBERTEasyIndexer(model_name=modelname)
+        indexer = ColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
     elif indextype == "divcolbert": 
         indexer = TokenColBERTEasyIndexer(model_name=modelname)
     elif indextype == "single":
@@ -40,12 +41,12 @@ def ds_load_indexer(indextype, modelname, datasetpath, redo=False):
     index_id = indexer.index_dataset(datasetpath, redo=redo)
     return indexer, index_id
 
-def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no"):
+def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no", qmod_name=None, qvecs=-1, dvecs=-1, ebsize=128, usefast="yes"):
 
     eval_set = Dataset.load_from_disk(evalsetpath)
     eval_set = check_process_tset(eval_set)
 
-    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes")
+    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes", qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, ebsize=ebsize, usefast=usefast)
     # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
     results = indexer.search(list(eval_set["question"]), index_id, k)
 
@@ -55,7 +56,7 @@ def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no"):
         metres[met].extend([indexer_eval_row(results[i], eval_set[i]["pos_chunks"], indexer, index_id, met) for i in range(len(results))])
 
     predictions_chunks = preds_to_chunks(results, indexer.documents[index_id])
-    return metres, predictions_chunks, eval_set['pos_chunks']
+    return metres, list(eval_set["question"]), predictions_chunks, list(eval_set['pos_chunks'])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -66,6 +67,11 @@ if __name__ == "__main__":
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--forceredo", type=str, default="no")
     parser.add_argument("--save_preds", type=str, default="no")
+    parser.add_argument("--qmod_name", type=str, default=None)
+    parser.add_argument("--colbert_qvecs", type=int, default=-1)
+    parser.add_argument("--colbert_dvecs", type=int, default=-1)
+    parser.add_argument("--colbert_ebsize", type=int, default=128)
+    parser.add_argument("--colbert_usefast", type=str, default="yes")
     args = parser.parse_args()
 
     print("starting eval")
@@ -75,6 +81,8 @@ if __name__ == "__main__":
     resultkey = args.eval_set_path.split("/")[-1]
     dsrep = args.dataset_path.replace("/", "_")
     methodkey = f"{args.index_type}-{args.model_name}-{args.k}-{dsrep}"
+    if args.qmod_name is not None:
+        methodkey += f"-{args.qmod_name.replace('/', '_')}"
 
     if os.path.exists("propercache/cache/setresults/"+resultkey+".pkl"): 
         metresults = pickload("propercache/cache/setresults/"+resultkey+".pkl")
@@ -86,12 +94,17 @@ if __name__ == "__main__":
         print(f"Loading results from cache for {resultkey}")
         metres = metresults[methodkey]
     else:
-        metres, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo)
+        metres, questions, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo, args.qmod_name, args.colbert_qvecs, args.colbert_dvecs, args.colbert_ebsize, args.colbert_usefast)
         metresults[methodkey] = metres
         pickdump(metresults, "propercache/cache/setresults/"+resultkey+".pkl")
         if len(args.save_preds) > 0:
-            pickdump((preds, golds), "propercache/cache/setresults/"+resultkey+"_"+args.save_preds+"_preds.pkl")
+            # save questions, preds, golds to jsonl file
+            with open("propercache/cache/setresults/"+resultkey+"_"+args.save_preds+"_preds2.jsonl", "w") as f:
+                for q, p, g in zip(questions, preds, golds):
+                    f.write(json.dumps({"question": q, "preds": list(p), "golds": list(g)}) + "\n")
 
     print(f"Mean precision: {mean(metres['precision'])}")
     print(f"Mean recall: {mean(metres['recall'])}")
     print(f"Mean atleastone: {mean(metres['atleastone'])}")
+
+    

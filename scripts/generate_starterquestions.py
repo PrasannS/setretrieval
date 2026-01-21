@@ -19,11 +19,14 @@ if __name__=="__main__":
     parser.add_argument("--endindex", type=int, default=10000)
     parser.add_argument("--domain", type=str, default="wikipedia")
     parser.add_argument("--model", type=str, default="gemini-2.5-flash-lite")
+    parser.add_argument("--doshuffle", type=str, default="no")
 
     args = parser.parse_args()
 
     dataset = Dataset.load_from_disk(args.dataset_path).select(range(args.startindex, args.endindex))
-    
+    if args.doshuffle == "yes":
+        dataset = dataset.shuffle(seed=42)
+        
     if args.domain == "wikipedia":
         pfunct = lambda x: abstract_questions_prompt.format(example_abstract_passage, example_abstract_questions, x)
     elif args.domain == "scientific":
@@ -32,7 +35,7 @@ if __name__=="__main__":
         pfunct = lambda x: abstract_questions_prompt.format(example_gut_passage, example_gut_questions, x)
     resultdata = passages_to_questions(dataset, model=args.model, pfunct=pfunct)
 
-    resultdata.save_to_disk(f"{args.dataset_path}_{args.startindex}_{args.endindex}_{args.model}_questions")
+    resultdata.save_to_disk(f"{args.dataset_path}_{args.startindex}_{args.endindex}_{args.model}_shuff{args.doshuffle}_questions")
 
     breakpoint()
 

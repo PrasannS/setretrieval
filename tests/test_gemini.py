@@ -12,6 +12,6 @@ def get_gemini_response(model: str, prompt: str) -> str:
     return response.text
 
 if __name__ == "__main__":
-    prompt = "What is the capital of France?"
-    response = get_gemini_response(model="gemini-2.5-pro", prompt=prompt)
+    prompt = "What is the capital of Japan?"
+    response = get_gemini_response(model="gemini-2.5-flash", prompt=prompt)
     print(response)

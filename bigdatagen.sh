@@ -18,7 +18,6 @@ export OMP_NUM_THREADS=128
 
 # python scripts/generate_setpositives.py --startindex 0 --endindex 500 --dataset_path propercache/data/datastores/gutenberg_chunks_10k_decont --starter_question_set propercache/data/colbert_training/gemini_gutfilteredtrainqs
 
-
 python scripts/generate_setpositives.py --startindex 0 --endindex 2 --dataset_path propercache/data/datastores/sanitychecks/wikirands100k --starter_question_set propercache/data/colbert_training/wikigemini_tinybigtest/
 python scripts/generate_setpositives.py --startindex 0 --endindex 2 --dataset_path propercache/data/datastores/sanitychecks/gutterands100k --starter_question_set propercache/data/colbert_training/gutengemini_tinybigtest/
 

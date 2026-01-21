@@ -13,7 +13,6 @@ authors = [
     {name = "Prasann Singhal", email = "prasann@berkeley.edu"}
 ]
 dependencies = [
-    "pylate[eval]",
     "vllm",
     "datasets",
     "tqdm",
@@ -22,7 +21,11 @@ dependencies = [
     "wandb",
     "sentence-transformers",
     "faiss-cpu",
-    "bm25s"
+    "bm25s",
+    "nltk",
+    "PyStemmer",
+    "peft",
+    "matplotlib"
 ]
 
 classifiers = [
