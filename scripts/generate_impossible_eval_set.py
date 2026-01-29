@@ -54,7 +54,6 @@ Original document:
 
 Modified document (make the claim true):"""
 
-
 def generate_impossible_claims(
     client: ParallelResponsesClient,
     chunks: List[str],

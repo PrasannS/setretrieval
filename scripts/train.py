@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("--divq_coeff", type=float, default=0.0)
     parser.add_argument("--colscore", type=str, default="maxsim")
     parser.add_argument("--querylen", type=int, default=32)
-    parser.add_argument("--doclen", type=int, default=32)
+    parser.add_argument("--doclen", type=int, default=512)
     parser.add_argument("--save_strat", type=str, default="epoch")
     parser.add_argument("--schedtype", type=str, default="cosine")
     parser.add_argument("--maxchars", type=int, default=5000)

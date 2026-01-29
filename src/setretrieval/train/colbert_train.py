@@ -37,6 +37,9 @@ from pylate.utils.tensor import convert_to_tensor
 from pylate.models.colbert import ColBERT
 from setretrieval.train.scores import route_colbscores_multiquery, route_colbscores_multipos, maxmax_scores, maxmax_scores_pairwise
 
+# import adamw8bit
+# from bitsandbytes.optim import AdamW8bit
+
 # given normal output with vector shape [B, T, D], zero out all vectors that aren't in the first token for each item in batch
 def newforward(self, input: dict[str, Tensor], **kwargs) -> dict[str, Tensor]:
     outs = self.old_forward(input, **kwargs)
@@ -105,11 +108,13 @@ class SetContrastive(nn.Module):
         else:
             query_embeddings = torch.nn.functional.normalize(self.model(sentence_features[0])["token_embeddings"], p=2, dim=-1)
         
+        
         if self.othermod == "document":
             with torch.no_grad():
                 document_embeddings = [torch.nn.functional.normalize(self.other_model(sentence_feature)["token_embeddings"], p=2, dim=-1) for sentence_feature in sentence_features[1:]]
         else:
             document_embeddings = [torch.nn.functional.normalize(self.model(sentence_feature)["token_embeddings"], p=2, dim=-1) for sentence_feature in sentence_features[1:]]
+        print("SHAPES: ", query_embeddings.shape, document_embeddings[0].shape, document_embeddings[1].shape)
 
         # TODO query embedding split quant thing
         embeddings = [query_embeddings, *document_embeddings]
@@ -298,7 +303,7 @@ def padded_tokenize(
 
         ct = self._first_module().tokenizer.cls_token
         ct = ct if ct == "[EMB]" else " "+ct
-        texts = [text + ct * addvecs for text in texts]
+        texts = [str(text) + ct * addvecs for text in texts]
 
 
         # Tokenize the texts, let's generally not pad to max length here
@@ -333,6 +338,7 @@ def padded_tokenize(
 
         # use this in loss function when needed
         tokenized_outputs['splitquant'] = torch.tensor(splitquant)
+        # breakpoint()
         return tokenized_outputs
 
 # for model-specific monkey patching
@@ -428,12 +434,12 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
         
         print(f"Using colscore: {metric.__name__} {colscore} as the score metric")
         # train_loss = losses.Contrastive(model=model, temperature=0.02)
-        # if dodefaulttrain == "no":
-        train_loss = SetContrastive(model=model, temperature=temp, score_metric=metric, div_coeff=div_coeff, divq_coeff=divq_coeff, othermodel_name=othermodel_name, othermod=othermod)
-        # train_loss = Contrastive(model=model, temperature=temp)
-        if div_coeff == 0.0 and divq_coeff == 0.0 and False:
+        
+        if div_coeff == 0.0 and divq_coeff == 0.0 and dodefaulttrain == "yes":
             print("Using Contrastive loss")
             train_loss = Contrastive(model=model, temperature=temp)
+        else:
+            train_loss = SetContrastive(model=model, temperature=temp, score_metric=metric, div_coeff=div_coeff, divq_coeff=divq_coeff, othermodel_name=othermodel_name, othermod=othermod)
         # else: 
         #     print("DOING DEFAULT TRAINING")
         #     train_loss = Contrastive(model=model, temperature=temp)
@@ -470,7 +476,9 @@ def train_colbert(train_dataset, eval_dataset, base_model="google-bert/bert-base
         save_only_model=True,
         save_strategy=save_strat,
         logging_steps=1,
-        # deepspeed="dsconfig.json",
+        gradient_checkpointing=True,
+        optim="adamw_8bit",
+        # deepspeed="/accounts/projects/sewonm/prasann/projects/setretrieval/ds_config.json",
     )
 
     # Initialize the trainer for the contrastive training
@@ -501,7 +509,10 @@ def train_sbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-u
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. Define the SentenceTransformer model
-    model = SentenceTransformer(base_model)
+    model = SentenceTransformer(base_model, trust_remote_code=True, model_kwargs={'dtype': torch.bfloat16})
+
+    # model = torch.compile(model)
+    print("We got this update here")
 
     # # Compiling the model makes the training faster
     # model = torch.compile(model)
@@ -531,6 +542,14 @@ def train_sbert(train_dataset, eval_dataset, base_model="google-bert/bert-base-u
         eval_strategy="epoch",
         lr_scheduler_type="constant",
         save_only_model=True,
+        logging_steps=10,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        dataloader_pin_memory=False, 
+        ddp_find_unused_parameters=False,
+        optim="adamw_8bit",
+        dataloader_drop_last=True,
+        # deepspeed="ds_config.json"
     )
 
     # Initialize the trainer

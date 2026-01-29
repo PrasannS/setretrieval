@@ -515,7 +515,21 @@ run_wikipedia_eval_vectors() {
 # python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-4B --dataset_path propercache/data/datastores/wikipedia_docs_15k_with_impossible_poschunks --eval_set_path propercache/data/evalsets/wikipedia_eval_impossible_500_processed --k 100 --save_preds "qwen4bimpossible" --forceredo "yes"
 
 
-python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-0.6B --dataset_path propercache/data/datastores/wikipedia_docs_15k_with_impossible_poschunks --eval_set_path propercache/data/evalsets/wikipedia_eval_impossible_500_processed --k 100 --save_preds "qwen06bimpossible" --forceredo "yes"
+# python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-0.6B --dataset_path propercache/data/datastores/wikipedia_docs_15k_with_impossible_poschunks --eval_set_path propercache/data/evalsets/wikipedia_eval_impossible_500_processed --k 100 --save_preds "qwen06bimpossible" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type single --model_name propercache/cache/sbert_training/contrastive-google-bert_bert-large-uncased-bs8-e1-lr5e-06-sbert-wikipedia_train_impossible_20k_processed --dataset_path propercache/data/datastores/wikipedia_docs_15k_with_impossible_poschunks --eval_set_path propercache/data/evalsets/wikipedia_eval_impossible_500_processed --k 100 --save_preds "sbertlarge20kimpossible" --forceredo "yes" 
+
+# python scripts/wikipedia_eval.py --index_type single --model_name propercache/cache/sbert_training/contrastive-facebook_opt-1.3b-bs8-e1-lr5e-06-sbert-wikipedia_train_impossible_20k_processed --dataset_path propercache/data/datastores/wikipedia_docs_15k_with_impossible_poschunks --eval_set_path propercache/data/evalsets/wikipedia_eval_impossible_500_processed --k 100 --save_preds "singleopt1b20kimpossible" --forceredo "yes" 
+
+
+# msmarco eval stuff
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr3e-06-msmarco_500k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "colbertlargemsmarco_q1d1"  --colbert_dvecs 1 --colbert_qvecs 1
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr3e-06-msmarco_500k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize1024 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "colbertlargemsmarco_q1d1_embsize1024"  --colbert_dvecs 1 --colbert_qvecs 1
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr3e-06-msmarco_500k-maxsim-divd0.0-divq0.0-qv32-dv512-cosine-temp0.02-omodneither-dodefaulttrainyes-embsize128 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "colbertlargemsmarco_q32d512_embsize128" 
+
+python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "bm25" 
 
 # vector stuff
 ## run_wikipedia_eval_vectors propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs8-e1-lr8e-06-gutenberg_gmini_30k_nosame-maxsim-divd0.0-divq0.0-qv1-dv100-cosine-temp0.02-omodneither-dodefaulttrainno 1 100 32 "yes" "yes" "qwen30kqv1dv100dim128"

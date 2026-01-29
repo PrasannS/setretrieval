@@ -10,7 +10,7 @@ import argparse
 import random
 import os
 from typing import List, Dict, Any, Tuple
-from datasets import Dataset
+from datasets import Dataset, DatasetDict
 from tqdm import tqdm
 
 from setretrieval.inference.easy_indexer import SingleEasyIndexer
@@ -18,32 +18,37 @@ from setretrieval.inference.oai_request_client import ParallelResponsesClient
 
 
 # Prompts for LLM interactions
-PROMPT_GENERATE_QUESTION = """Given the following document, generate a question that can be answered using information from the document. The question should be clear and specific.
+PROMPT_GENERATE_QUESTION = """Given the following document, generate a yes/no knowledge question that can be answered using information from the document. The question should be clear and specific, and the answer should always be yes.
+
+Examples of questions: "Can any tree species grow with low sunlight?", "Do any world governments have more than 2 branches?"
 
 Document:
 {document}
 
 Question:"""
 
-PROMPT_GENERATE_IMPOSSIBLE_QUESTION = """Given the following document, generate a general impossible or universally incorrect question that is relevant to or contradicts the document. This should be a question that is clearly false in the real world but could be made true by modifying the document.
+PROMPT_GENERATE_IMPOSSIBLE_QUESTION = """Given the following document, generate a concise google-search style general knowledge question related to an impossible or universally incorrect claim contradictory to the document. This should be a carefully crafted statement that is almost certainly not true in any part of the real world, history, or popular fiction, but the document could be modified in a way that claims the question is true.
 
 Examples:
-- For a document about world governments: "Do any world governments have more than 8 branches?"
+- For a document about world governments: "Do any world governments have more than 8 branches?", "Are there governments which ban people older than 50 from public office?"
 - For a document about trees: "Can trees grow without any sunlight ever?"
+
+The question should be general enough that diverse documents could be modified to make the question true, and shouldn't be too specific to the document. Questions shouldn't be more crazy than the examples. Don't ask questions with words like "all" that need multiple documents to be true. The examples are good examples in terms of style and content.
 
 Document:
 {document}
 
-Impossible question:"""
+Only output the questions, no additional text."""
 
-PROMPT_MODIFY_CHUNK = """Given the following impossible question and a document, modify the document so that the impossible question can be answered affirmatively according to the document. Make minimal but clear changes to the document.
 
-Impossible question: {question}
+PROMPT_MODIFY_CHUNK = """Given the following impossible claim and a document, write a new version of the document where the impossible claim is convincingly true, while being subtle and not standing out too much. Make minimal but changes to the document, and preserve the style, tone, and coherence. Enclose modifed parts with ** **, and try to modify the middle of the document. Do not use any other formatting.
+
+Impossible claim: {claim}
 
 Original document:
 {document}
 
-Modified document (make the question answerable as 'yes'):"""
+Modified document (make the claim true):"""
 
 
 def generate_questions_method_a(
@@ -61,7 +66,10 @@ def generate_questions_method_a(
         print(f"DEBUG: First prompt:\n{prompts[0]}\n")
         prompts = prompts[:min(3, len(prompts))]
     
-    results = client.run(model=model, prompts=prompts, temperature=0.7, max_output_tokens=200)
+    results = []
+    for i in range(0, len(prompts), 1000):
+        results.extend(client.run(model=model, prompts=prompts[i:i+1000], max_output_tokens=200))
+        print(f"Cost: ${client.total_cost:.4f}")
     
     questions = []
     for i, result in enumerate(results):
@@ -75,6 +83,8 @@ def generate_questions_method_a(
                 if question.startswith(prefix):
                     question = question[len(prefix):].strip()
             questions.append(question)
+    if debug:
+        breakpoint()
     
     print(f"Total cost so far: ${client.total_cost:.4f}")
     return questions
@@ -95,7 +105,10 @@ def generate_impossible_questions_method_b(
         print(f"DEBUG: First prompt:\n{prompts[0]}\n")
         prompts = prompts[:min(3, len(prompts))]
     
-    results = client.run(model=model, prompts=prompts, temperature=0.7, max_output_tokens=200)
+    results = []
+    for i in range(0, len(prompts), 1000):
+        results.extend(client.run(model=model, prompts=prompts[i:i+1000], max_output_tokens=200))
+        print(f"Cost: ${client.total_cost:.4f}")
     
     questions = []
     for i, result in enumerate(results):
@@ -110,6 +123,8 @@ def generate_impossible_questions_method_b(
                     question = question[len(prefix):].strip()
             questions.append(question)
     
+    if debug:
+        breakpoint()
     print(f"Total cost so far: ${client.total_cost:.4f}")
     return questions
 
@@ -125,15 +140,19 @@ def modify_chunks_for_questions(
     print(f"Modifying {len(chunks)} chunks...")
     
     prompts = [
-        PROMPT_MODIFY_CHUNK.format(question=question, document=chunk)
+        PROMPT_MODIFY_CHUNK.format(claim=question, document=chunk)
         for chunk, question in zip(chunks, questions)
     ]
     
     if debug:
         print(f"DEBUG: First modification prompt:\n{prompts[0]}\n")
         prompts = prompts[:min(3, len(prompts))]
+        breakpoint()
     
-    results = client.run(model=model, prompts=prompts, temperature=0.3, max_output_tokens=2000)
+    results = []
+    for i in range(0, len(prompts), 1000):
+        results.extend(client.run(model=model, prompts=prompts[i:i+1000], max_output_tokens=2000))
+        print(f"Cost: ${client.total_cost:.4f}")
     
     modified_chunks = []
     for i, result in enumerate(results):
@@ -142,6 +161,9 @@ def modify_chunks_for_questions(
             modified_chunks.append(chunks[i])  # Use original if modification fails
         else:
             modified_chunks.append(result["response"].strip())
+
+    if debug:
+        breakpoint()
     
     print(f"Total cost so far: ${client.total_cost:.4f}")
     return modified_chunks
@@ -169,13 +191,10 @@ def sample_negative_chunks(
 
 def generate_train_set(
     datastore_path: str,
-    embed_mod: str,
     output_train_path: str,
-    output_datastore_path: str,
     num_chunks: int = 1000,
     method_a_ratio: float = 0.5,
     num_negatives: int = 10,
-    method_b_use_original_as_negative: bool = True,
     llm_model: str = "gemini-2.5-flash",
     seed: int = 42,
     debug: bool = False,
@@ -188,14 +207,12 @@ def generate_train_set(
     
     # Load datastore
     print(f"Loading datastore from {datastore_path}...")
-    all_chunks = Dataset.load_from_disk(datastore_path)["text"]
+    all_chunks = Dataset.load_from_disk(datastore_path)
     print(f"Loaded {len(all_chunks)} chunks")
-    
-    # Sample chunks for training
-    num_chunks = min(num_chunks, len(all_chunks)) if not debug else min(10, len(all_chunks))
-    random.seed(seed)
-    sampled_chunks = random.sample(all_chunks, num_chunks)
-    print(f"Sampled {len(sampled_chunks)} chunks for training")
+
+    all_chunks = list(all_chunks.shuffle(seed=seed)['text'])
+
+    sampled_chunks = all_chunks[:num_chunks] # list(all_chunks.select(range(num_chunks))['text'])
     
     # Split into Method A and Method B
     num_method_a = int(len(sampled_chunks) * method_a_ratio)
@@ -242,13 +259,9 @@ def generate_train_set(
         modified_chunks_b = modify_chunks_for_questions(client, chunks_b, questions_b, model=llm_model, debug=debug)
         
         # Positives are the modified chunks
-        pos_chunks_b = [[chunk] for chunk in modified_chunks_b]
+        pos_chunks_b = [chunk for chunk in modified_chunks_b]
         
-        # Negatives: either original chunks or random chunks
-        if method_b_use_original_as_negative:
-            neg_chunks_b = [[chunk] for chunk in chunks_b]  # Use original as negative
-        else:
-            neg_chunks_b = sample_negative_chunks(all_chunks, modified_chunks_b, num_negatives, seed=seed)
+        neg_chunks_b = [chunk for chunk in chunks_b]  # Use original as negative
         
         train_queries.extend(questions_b)
         train_pos_chunks.extend(pos_chunks_b)
@@ -256,27 +269,26 @@ def generate_train_set(
     
     print(f"\nGenerated {len(train_queries)} training examples")
     
+    lastnum = 500
     # Create training dataset
     train_dataset = Dataset.from_dict({
-        "question": train_queries,
-        "pos_chunks": train_pos_chunks,
-        "neg_chunks": train_neg_chunks
+        "query": train_queries[lastnum:],
+        "positive": train_pos_chunks[lastnum:],
+        "negative": train_neg_chunks[lastnum:]
     })
-    
-    # Create final datastore (all positive chunks)
-    final_datastore_chunks = [chunks[0] for chunks in train_pos_chunks]
-    final_datastore = Dataset.from_dict({
-        "text": final_datastore_chunks
+    eval_dataset = Dataset.from_dict({
+        "query": train_queries[:lastnum],
+        "positive": train_pos_chunks[:lastnum],
+        "negative": train_neg_chunks[:lastnum]
     })
-    
-    # Save datasets
+    fulldset = DatasetDict({
+        "train": train_dataset,
+        "test": eval_dataset
+    })
     print(f"\nSaving training set to {output_train_path}...")
     os.makedirs(os.path.dirname(output_train_path) if os.path.dirname(output_train_path) else ".", exist_ok=True)
-    train_dataset.save_to_disk(output_train_path)
-    
-    print(f"Saving final datastore to {output_datastore_path}...")
-    os.makedirs(os.path.dirname(output_datastore_path) if os.path.dirname(output_datastore_path) else ".", exist_ok=True)
-    final_datastore.save_to_disk(output_datastore_path)
+
+    fulldset.save_to_disk(output_train_path)
     
     # Print final stats
     stats = client.get_stats()
@@ -290,7 +302,6 @@ def generate_train_set(
     print(f"Training examples generated: {len(train_queries)}")
     print(f"  - Method A: {len(chunks_a)}")
     print(f"  - Method B: {len(chunks_b)}")
-    print(f"Final datastore size: {len(final_datastore_chunks)}")
     
     client.close()
 
@@ -299,20 +310,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate training set for retrieval training")
     parser.add_argument("--datastore_path", type=str, required=True,
                         help="Path to input datastore (HuggingFace dataset with 'text' column)")
-    parser.add_argument("--embed_mod", type=str, default="nomic-ai/nomic-embed-text-v1",
-                        help="Embedding model for SingleEasyIndexer (not used in training generation, but kept for consistency)")
     parser.add_argument("--output_train_path", type=str, required=True,
                         help="Path to save training set (HuggingFace dataset)")
-    parser.add_argument("--output_datastore_path", type=str, required=True,
-                        help="Path to save final datastore with positive chunks")
     parser.add_argument("--num_chunks", type=int, default=1000,
                         help="Number of chunks to process")
     parser.add_argument("--method_a_ratio", type=float, default=0.5,
                         help="Ratio of chunks to use for Method A (rest for Method B)")
-    parser.add_argument("--num_negatives", type=int, default=10,
+    parser.add_argument("--num_negatives", type=int, default=1,
                         help="Number of negative chunks per example (for Method A and Method B when not using original)")
-    parser.add_argument("--method_b_use_original_as_negative", action="store_true",
-                        help="For Method B, use original chunk as negative instead of random chunks")
     parser.add_argument("--llm_model", type=str, default="gemini-2.5-flash",
                         help="LLM model for generating questions and modifying chunks")
     parser.add_argument("--seed", type=int, default=42,
@@ -326,13 +331,10 @@ if __name__ == "__main__":
     
     generate_train_set(
         datastore_path=args.datastore_path,
-        embed_mod=args.embed_mod,
         output_train_path=args.output_train_path,
-        output_datastore_path=args.output_datastore_path,
         num_chunks=args.num_chunks,
         method_a_ratio=args.method_a_ratio,
         num_negatives=args.num_negatives,
-        method_b_use_original_as_negative=args.method_b_use_original_as_negative,
         llm_model=args.llm_model,
         seed=args.seed,
         debug=args.debug,

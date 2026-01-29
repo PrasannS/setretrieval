@@ -206,3 +206,27 @@
 # torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 5 --learning_rate 5e-5 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "train50wordsdebug100setversion" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 50 --dodefaulttrain "no" --compile "no" --save_strat "no" --colscore "multipos" #--lora_rank 32
 
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 5e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "mathtask1_expr2num_min0_max5000_md0_0_hardneg0.0_trainingsize100000" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 1 --dodefaulttrain "no" --embsize 8 --compile "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 5e-6 --model_name "facebook/opt-1.3b" --traintype "sbert" --divq_coeff 0 --dataset "wikipedia_train_impossible_20k_processed" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no"
+
+# train for impossible, possible sets
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 8 --num_epochs 1 --learning_rate 5e-6 --model_name "facebook/opt-1.3b" --traintype "sbert" --divq_coeff 0 --dataset "wikipedia_train_possible_20k_processed" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no"
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 5 --learning_rate 5e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "10dworddebug100setversion" --div_coeff 0 --temp 0.02 --doclen 20 --querylen 1 --dodefaulttrain "no" --compile "no" --save_strat "no" --colscore "multiquery" #--lora_rank 32
+
+# torchrun --master_port 12345 --nproc_per_node=1 scripts/train.py --batch_size 8 --num_epochs 5 --learning_rate 5e-5 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --divq_coeff 0 --dataset "train50wordsdebug100setversion_splitup" --div_coeff 0 --temp 0.02 --doclen 1 --querylen 50 --dodefaulttrain "no" --compile "no" --save_strat "no" # --colscore "multipos" #--lora_rank 32
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 3e-6 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "yes" --compile "yes" --querylen 32 
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 3e-6 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "yes" --querylen 1 --doclen 1
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 3e-6 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "yes" --querylen 1 --doclen 1 --embsize 1024
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 3e-6 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "yes" --querylen 1 --doclen 1 --embsize 10000
+
+# torchrun --nproc_per_node=1 scripts/train.py --batch_size 1 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-8B" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --querylen 1 --doclen 1 --embsize 128
+
+
+# torchrun --nproc_per_node=1 scripts/train.py --batch_size 1 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-8B" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --querylen 1 --doclen 1 --embsize 128
+
+torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-8B" --traintype "sbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" 

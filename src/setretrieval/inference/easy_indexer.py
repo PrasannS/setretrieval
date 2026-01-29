@@ -193,6 +193,7 @@ class ColBERTEasyIndexer(EasyIndexerBase):
 
         self.embsize = 512 if "embsize512" in model_name else 128
         self.embsize = 8 if "embsize8" in model_name else self.embsize
+        self.embsize = 1024 if "embsize1024" in model_name else self.embsize
         self.usefast = usefast == "yes"
 
         # TODO might be able to do this automatically
@@ -271,9 +272,9 @@ class ColBERTEasyIndexer(EasyIndexerBase):
         if self.num_workers <= 1 or len(documents) < self.use_bsize * 2 * self.num_workers or (self.qmod_name is not None and qtype == "query"):
             self.load_model()
             if qtype == "query":
-                return self.model.old_encode(documents, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
+                return self.model.encode(documents, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
             else:
-                return self.model.old_encode(documents, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
+                return self.model.encode(documents, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
         
         # Multi-worker encoding
         self.load_models_for_workers()
@@ -287,9 +288,9 @@ class ColBERTEasyIndexer(EasyIndexerBase):
             model, gpu_id, worker_id = model_gpu_worker
             # Ensure model is on correct GPU
             if qtype == "query":
-                return model.old_encode(docs, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
+                return model.encode(docs, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
             else:
-                return model.old_encode(docs, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
+                return model.encode(docs, batch_size=self.use_bsize, is_query=qtype=="query", show_progress_bar=True)
         
         # Process chunks in parallel across workers
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
@@ -479,7 +480,7 @@ class BM25EasyIndexer(EasyIndexerBase):
     def index_exists(self, index_id):
         return os.path.exists(os.path.join(self.index_base_path, index_id+".bm25"))
         
-    def index_documents(self, documents, index_id):
+    def index_documents(self, documents, index_id, redo=False):
         os.makedirs(self.index_base_path, exist_ok=True)
         if self.index_exists(index_id):
             print(f"Index {index_id} already exists")

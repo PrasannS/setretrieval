@@ -35,6 +35,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+evaluation_datasets/
+
 # PyInstaller
 *.manifest
 *.spec

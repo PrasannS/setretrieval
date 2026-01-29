@@ -99,7 +99,7 @@ class MaxMaxTripletEvaluator(TripletEvaluator):
             documents_embeddings=embeddings_negatives,
         )
 
-        breakpoint()
+        # breakpoint()
 
 
         metrics = {
