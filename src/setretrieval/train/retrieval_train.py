@@ -20,9 +20,6 @@ from peft import LoraConfig
 from pylate import evaluation, losses, models, utils
 from pylate.losses.contrastive import Contrastive
 from pylate.scores import colbert_scores
-from pylate.utils import all_gather, all_gather_with_gradients, get_rank, get_world_size
-from pylate.utils.tensor import convert_to_tensor
-from pylate.models.colbert import ColBERT
 
 from setretrieval.eval.maxmax_evaluator import MaxMaxTripletEvaluator
 from setretrieval.train.scores import (
@@ -279,6 +276,13 @@ def _build_training_args(
         save_only_model=True,
         save_strategy=save_strat,
         logging_steps=1,
+        gradient_checkpointing=True,
+        optim="adamw_8bit",
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        dataloader_pin_memory=False, 
+        ddp_find_unused_parameters=False,
+        dataloader_drop_last=True,
+        # deepspeed="ds_config.json"
     )
 
 

@@ -9,6 +9,7 @@ import numpy as np
 import faiss
 from pylate import indexes, models, retrieve
 from setretrieval.utils.utils import pickdump, pickload
+from setretrieval.train.pylate_monkeypatch import padded_tokenize, newforward, modadj_tokenize, mod_encode
 
 class ColBERTEasyIndexer(EasyIndexerBase):
     def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='propercache/cache/colbert_indices', gpu_list=None, div_colbert=False, qmod_name=None, qvecs=-1, dvecs=-1, use_bsize=128, usefast=True):
@@ -26,6 +27,8 @@ class ColBERTEasyIndexer(EasyIndexerBase):
 
         self.embsize = 512 if "embsize512" in model_name else 128
         self.embsize = 8 if "embsize8" in model_name else self.embsize
+        self.embsize = 1024 if "embsize1024" in model_name else self.embsize
+        # parse automatically instead as the first number after embsize
         self.usefast = usefast == "yes"
 
         # TODO might be able to do this automatically
