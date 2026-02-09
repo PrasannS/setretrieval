@@ -26,6 +26,7 @@ from setretrieval.train.scores import (
     route_colbscores_multiquery,
     route_colbscores_multipos,
     maxmax_scores,
+    extend_vector_scores,
 )
 from setretrieval.train.pylate_monkeypatch import (
     padded_tokenize,
@@ -63,18 +64,25 @@ def _preprocess_datasets(
     maxchars: int = 5000,
 ):
     """Truncate positive/negative to maxchars for ColBERT; no-op for SBERT."""
-    if model_type != "colbert":
-        return train_dataset, eval_dataset
     truncate = lambda x: {
         **x,
         "positive": x["positive"][:maxchars],
         "negative": x["negative"][:maxchars],
     }
-    return (
-        train_dataset.map(truncate),
-        eval_dataset.map(truncate),
-    )
+    def qproc(x):
+        return {
+            'query': f"Instruct: Find documents, both normal and unexpected, that are relevant to the query.\nQuery: {x['query']}"
+        }
+    # only truncate for colbert
+    if model_type == "colbert":
+        train_dataset = train_dataset.map(truncate)
+        eval_dataset = eval_dataset.map(truncate)
+    else:
+        eval_dataset = eval_dataset.map(qproc)
+        train_dataset = train_dataset.map(qproc)
+    print("Sample datapoint: ", train_dataset[0])
 
+    return train_dataset, eval_dataset
 
 # -----------------------------------------------------------------------------
 # Run name and output directory
@@ -129,7 +137,7 @@ def _get_output_dir(model_type: Literal["sbert", "colbert"], run_name: str) -> s
 
 
 def _create_sbert_model(base_model: str, **kwargs):
-    return SentenceTransformer(base_model)
+    return SentenceTransformer(base_model, model_kwargs={'dtype': torch.bfloat16})
 
 
 def _create_colbert_model(
@@ -168,6 +176,7 @@ def _create_colbert_model(
         document_length=dvecs,
         do_query_expansion=(dodefaulttrain == "yes"),
         embedding_size=embsize,
+        model_kwargs={'dtype': torch.bfloat16},
     )
     if lora_config is not None:
         model.add_adapter(lora_config)
@@ -204,6 +213,7 @@ def _create_colbert_loss(
         "multipos": route_colbscores_multipos,
         "multiquery": route_colbscores_multiquery,
         "maxsim": colbert_scores,
+        "extend": extend_vector_scores,
     }
     metric = score_map.get(colscore, maxmax_scores)
     return SetContrastive(
@@ -260,9 +270,12 @@ def _build_training_args(
     mini_batch_size: int | None = None,
     save_strat: str = "epoch",
     schedtype: str = "constant",
-    **kwargs,
+    gcheck: str = "yes",
+    **kwargs
 ) -> SentenceTransformerTrainingArguments:
     per_device_eval_batch_size = mini_batch_size if model_type == "colbert" else per_device_batch_size
+    print("batch size is ", per_device_batch_size)
+    gch = True if gcheck == "yes" else False
     return SentenceTransformerTrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_train_epochs,
@@ -276,11 +289,11 @@ def _build_training_args(
         save_only_model=True,
         save_strategy=save_strat,
         logging_steps=1,
-        gradient_checkpointing=True,
+        gradient_checkpointing=gch,
         optim="adamw_8bit",
         gradient_checkpointing_kwargs={"use_reentrant": False},
         dataloader_pin_memory=False, 
-        ddp_find_unused_parameters=False,
+        ddp_find_unused_parameters=gch==False,
         dataloader_drop_last=True,
         # deepspeed="ds_config.json"
     )
@@ -313,6 +326,7 @@ def train_retriever(
     do_compile: bool | str = True,
     lora_rank: int = -1,
     embsize: int = 128,
+    gcheck: str = "yes",
     **kwargs,
 ):
     """
@@ -323,6 +337,7 @@ def train_retriever(
         train_dataset, eval_dataset, model_type, maxchars
     )
 
+    # breakpoint()
     colbert_run_kw = {
         "colscore": colscore,
         "div_coeff": div_coeff,
@@ -382,6 +397,7 @@ def train_retriever(
         mini_batch_size=mini_batch_size,
         save_strat=save_strat,
         schedtype=schedtype,
+        gcheck=gcheck
     )
 
     trainer_kw: dict = {

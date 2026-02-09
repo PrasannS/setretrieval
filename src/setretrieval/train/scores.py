@@ -2,7 +2,26 @@ from __future__ import annotations
 import numpy as np
 import torch
 from pylate.utils.tensor import convert_to_tensor
-from pylate.scores import colbert_scores
+from pylate.scores import colbert_scores, colbert_kd_scores
+
+# get rid of the mask component, hmm TODO this could actually be causing problems...
+def mod_colbert_kd_scores(
+    queries_embeddings: list | np.ndarray | torch.Tensor,
+    documents_embeddings: list | np.ndarray | torch.Tensor,
+    queries_mask: torch.Tensor = None,
+    documents_mask: torch.Tensor = None,
+) -> torch.Tensor:
+    scores = colbert_kd_scores(queries_embeddings, documents_embeddings, None, None)
+    return scores
+
+def mod_colbert_scores(
+    queries_embeddings: list | np.ndarray | torch.Tensor,
+    documents_embeddings: list | np.ndarray | torch.Tensor,
+    queries_mask: torch.Tensor = None,
+    documents_mask: torch.Tensor = None,
+) -> torch.Tensor:
+    scores = colbert_scores(queries_embeddings, documents_embeddings, None, None)
+    return scores
 
 def maxmax_scores_pairwise(
     queries_embeddings: torch.Tensor,
@@ -25,6 +44,16 @@ def maxmax_scores_pairwise(
         scores.append(query_document_score.max(axis=-1).values.max(axis=-1).values)
 
     return torch.stack(scores, dim=0)
+
+
+def extend_vector_scores(queries_embeddings: torch.Tensor, documents_embeddings: torch.Tensor, queries_mask: torch.Tensor = None, documents_mask: torch.Tensor = None) -> torch.Tensor:
+    # breakpoint()
+    # use only non-zero vectors from queries_embeddings and documents_embeddings
+    queries_embeddings = queries_embeddings.view(queries_embeddings.shape[0], -1)
+    documents_embeddings = documents_embeddings.view(documents_embeddings.shape[0], -1)
+    # breakpoint()
+    similarity_mat = queries_embeddings @ documents_embeddings.T
+    return similarity_mat
 
 def maxmax_scores(
     queries_embeddings: list | np.ndarray | torch.Tensor,

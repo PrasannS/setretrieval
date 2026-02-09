@@ -229,4 +229,36 @@
 
 # torchrun --nproc_per_node=1 scripts/train.py --batch_size 1 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-8B" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --querylen 1 --doclen 1 --embsize 128
 
-torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-8B" --traintype "sbert" --divq_coeff 0 --dataset "msmarco_500k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" 
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --querylen 1 --doclen 1 --embsize 1024 --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 6e-5 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "sbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 3e-6 --model_name "Qwen/Qwen3-Embedding-0.6B" --traintype "colbert" --querylen 1 --doclen 1 --embsize 1024 --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 9e-5 --model_name "google-bert/bert-large-uncased" --traintype "sbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no"
+
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 9e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 1024 --querylen 1 --doclen 1
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 9e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 8 --querylen 1 --doclen 1
+
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 9e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 10 --doclen 10
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 1 --doclen 10
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 1 --doclen 100
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 1 --doclen 1
+
+# torchrun --nproc_per_node=2 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "Alibaba-NLP/gte-modernbert-base" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 10 --doclen 10 --colscore "extend"
+
+# torchrun --nproc_per_node=2 scripts/reasoncolbert_reprod.py
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 40 --doclen 40 --colscore "extend"
+
+torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 1 --doclen 1 --colscore "extend"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 10 --doclen 10 --colscore "extend"
+
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 40 --doclen 40 --colscore "extend"
+

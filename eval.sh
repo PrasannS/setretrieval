@@ -1,3 +1,14 @@
+#!/bin/bash
+#SBATCH --job-name=modernbert-pylate
+#SBATCH --output=eval-%j.log
+#SBATCH --error=eval-%j.err
+#SBATCH --time=24:00:00
+#SBATCH --gpus=4
+#SBATCH --cpus-per-task=128
+#SBATCH --mem=400GB
+source /system/linux/miniforge-3.12/etc/profile.d/conda.sh
+conda activate scaling7
+
 # python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path data/datastores/wikipedia_docs_15k --eval_set_path data/evalsets/settest_v1 --k 10
 # python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path data/datastores/wikipedia_docs_150k --eval_set_path data/evalsets/settest_v1 --k 10
 
@@ -529,11 +540,215 @@ run_wikipedia_eval_vectors() {
 
 # python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr3e-06-msmarco_500k-maxsim-divd0.0-divq0.0-qv32-dv512-cosine-temp0.02-omodneither-dodefaulttrainyes-embsize128 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "colbertlargemsmarco_q32d512_embsize128" 
 
-python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "bm25" 
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/msmarco_20k_docs --eval_set_path propercache/data/evalsets/msmarco_20k_docs --k 100 --save_preds "bm25" 
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/nq_hardnegs_testset --eval_set_path propercache/data/evalsets/nq_hardnegs_testset --k 100 --save_preds "bm25" 
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 10 --save_preds "bm25" 
+
+# python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-8B --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 10 --save_preds "qwen06b"  --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "bm25" 
+
+# python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-0.6B --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "qwen06b" 
+
+# python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-8B --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "qwen8b" 
+
+
+# propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs64-e1-lr3e-06-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize1024
+
+# export CUDA_VISIBLE_DEVICES=0
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs64-e1-lr3e-06-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize1024 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbert" --forceredo "yes" --colbert_qvecs 1 --colbert_dvecs 1
 
 # vector stuff
 ## run_wikipedia_eval_vectors propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs8-e1-lr8e-06-gutenberg_gmini_30k_nosame-maxsim-divd0.0-divq0.0-qv1-dv100-cosine-temp0.02-omodneither-dodefaulttrainno 1 100 32 "yes" "yes" "qwen30kqv1dv100dim128"
 ## run_wikipedia_eval_vectors propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs8-e1-lr8e-06-gutenberg_gmini_30k_nosame-maxsim-divd0.0-divq0.0-qv1-dv100-cosine-temp0.02-omodneither-dodefaulttrainno-embsize512 1 100 32 "yes" "no" "qwen30kqv1dv100dim512"
 ## run_wikipedia_eval_vectors propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs8-e1-lr8e-06-gutenberg_gmini_30k_nosame-maxsim-divd0.0-divq0.0-qv1-dv100-cosine-temp0.02-omodneither-dodefaulttrainno 100 100 32 "no" "no"
+
 ## run_wikipedia_eval_vectors propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs8-e1-lr8e-06-gutenberg_gmini_30k_nosame-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno 1 1 32 "yes" "yes" "qwen30kqv1dv1dim128"
+
 ## run_wikipedia_eval_vectors propercache/cache/colbert_training/contrastive-Qwen_Qwen3-Embedding-0.6B-bs8-e1-lr8e-06-gutenberg_gmini_30k_nosame-maxsim-divd0.0-divq0.0-qv100-dv1-cosine-temp0.02-omodneither-dodefaulttrainno 100 1 32 "yes" "yes" "qwen30kqv100dv1dim128"
+
+# python scripts/wikipedia_eval.py --index_type single --model_name propercache/cache/sbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-sbert --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bsinglebert" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize1024 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbert" --forceredo "yes" --colbert_qvecs 1 --colbert_dvecs 1
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes128" --forceredo "yes" --colbert_qvecs 1 --colbert_dvecs 1
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes128" --colbert_qvecs 1 --colbert_dvecs 1 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize8 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes8" --forceredo "yes" --colbert_qvecs 1 --colbert_dvecs 1
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv10-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes128q10d10" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "train100k06bcolbertes128q1d1" --colbert_qvecs 1 --colbert_dvecs 1 --forceredo "yes"
+
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv10-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "train100k06bcolbertes128q10d10" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr9e-05-msmarco_100k-extend-divd0.0-divq0.0-qv50-dv50-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "train100k06bcolbertes128q50d50" --colbert_qvecs 50 --colbert_dvecs 50 --forceredo "yes"
+
+
+# # check fiqa single with qwen-0.6B and qwen-8b 
+# python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-0.6B --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "qwen06b" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type single --model_name Qwen/Qwen3-Embedding-8B --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "qwen8b" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-colbert-KD-8e-05/checkpoint-1000 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "modb1k" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-colbert-KD-8e-05/checkpoint-4000 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "modb4k" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-colbert-KD-8e-05/checkpoint-8000 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "modb8k" --forceredo "yes"
+
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-colbert-KD-8e-05/checkpoint-1000 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "defcolb1k" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-colbert-KD-8e-05-qv-1-dv-1-embsize128/checkpoint-1000 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "quantcolb1k" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv-1-dv-1-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormal" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv1-dv1-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d1embsize128" --colbert_qvecs 1 --colbert_dvecs 1 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type single --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-DPR-8e-05/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "dprcolbnormal"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv1-dv1-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d1embsize768" --colbert_qvecs 1 --colbert_dvecs 1 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv10-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d10embsize768" --colbert_qvecs 1 --colbert_dvecs 10 
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d100embsize768" --colbert_qvecs 1 --colbert_dvecs 100
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d100embsize128" --colbert_qvecs 1 --colbert_dvecs 100
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d100embsize128faiss" --colbert_qvecs 1 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d100embsize128faiss" --colbert_qvecs 1 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d100embsize768faiss" --colbert_qvecs 1 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv32-dv100-embsize128/checkpoint-200 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq32d100embsize128faiss" --colbert_qvecs 32 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv1000-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq1d1000embsize768faiss" --colbert_qvecs 1 --colbert_dvecs 1000 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv32-dv100-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq32d100embsize128faiss" --colbert_qvecs 32 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv-1-dv-1-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq-1d-1embsize128" --colbert_qvecs -1 --colbert_dvecs -1 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv100-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq100d100embsize128" --colbert_qvecs 100 --colbert_dvecs 100 --forceredo "yes"
+
+######################################################## MSMARCO version of above
+
+
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv-1-dv-1-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormal" 
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv10-dv1-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq10d1embsize128" --colbert_qvecs 10 --colbert_dvecs 1 --forceredo "yes"
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv1-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq100d1embsize128" --colbert_qvecs 100 --colbert_dvecs 1 --forceredo "yes"
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv10-dv1-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq10d1embsize128" --colbert_qvecs 10 --colbert_dvecs 1 --forceredo "yes"
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv1-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq100d1embsize128" --colbert_qvecs 100 --colbert_dvecs 1 --forceredo "yes"
+
+#### 768 version
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv10-dv1-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq10d1embsize768" --colbert_qvecs 10 --colbert_dvecs 1 --forceredo "yes"
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv1-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq100d1embsize768" --colbert_qvecs 100 --colbert_dvecs 1 --forceredo "yes"
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv10-dv1-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq10d1embsize768" --colbert_qvecs 10 --colbert_dvecs 1 --forceredo "yes"
+
+python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv1-embsize768/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "paircolbnormalq100d1embsize768" --colbert_qvecs 100 --colbert_dvecs 1 --forceredo "yes"
+
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv10-dv10-embsize128-extend/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "extendq10d10embsize128" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv100-embsize128-extend/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "extendq100d100embsize128" --colbert_qvecs 100 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv10-dv10-embsize128-extend/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "extendq10d10embsize128" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv100-embsize128-extend/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "extendq100d100embsize128" --colbert_qvecs 100 --colbert_dvecs 100 --forceredo "yes"
+
+
+# TODO there's 768 versions of these...
+
+
+
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "bm25"
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "bm25"
+
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "bm25"
+
+# python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds "bm25"
+
+
+
+# TODO need higher LR runs for these... 
+export CUDA_VISIBLE_DEVICES=0
+# python scripts/wikipedia_eval.py --index_type single --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-DPR-8e-05/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "dprcolbnormal"
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv1-dv1-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d1embsize128" --colbert_qvecs 1 --colbert_dvecs 1 
+
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv1-dv1-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d1embsize768" --colbert_qvecs 1 --colbert_dvecs 1 
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv10-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d10embsize768" --colbert_qvecs 1 --colbert_dvecs 10 
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d100embsize768" --colbert_qvecs 1 --colbert_dvecs 100
+
+# # python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d100embsize128" --colbert_qvecs 1 --colbert_dvecs 100
+
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d100embsize128faiss" --colbert_qvecs 1 --colbert_dvecs 100 
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d100embsize768faiss" --colbert_qvecs 1 --colbert_dvecs 100 
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv32-dv100-embsize128/checkpoint-200 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq32d100embsize128faiss" --colbert_qvecs 32 --colbert_dvecs 100 
+
+# python scripts/wikipedia_eval.py --index_type colbert_faiss --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv1000-embsize768/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq1d1000embsize768faiss" --colbert_qvecs 1 --colbert_dvecs 1000
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv32-dv100-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq32d100embsize128faiss" --colbert_qvecs 32 --colbert_dvecs 100 
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv-1-dv-1-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq-1d-1embsize128" --colbert_qvecs -1 --colbert_dvecs -1 
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv100-dv100-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormalq100d100embsize128" --colbert_qvecs 100 --colbert_dvecs 100 
+
+
+######################################################################################### END 
+
+
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-colbert-KD-8e-05-qv1-dv1-embsize128/checkpoint-3906 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --colbert_qvecs 1 --colbert_dvecs 1 --k 1 --save_preds "modb4k128" --forceredo "yes"
+
+export CUDA_VISIBLE_DEVICES=0
+# python scripts/wikipedia_eval.py --index_type single --model_name "Alibaba-NLP/gte-modernbert-base" --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "ab" --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type single --model_name  --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --colbert_qvecs 1 --colbert_dvecs 1 --k 100 --save_preds "modb4k128usemask" --forceredo "yes" --usemask "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-extend-divd0.0-divq0.0-qv10-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes1280extend" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-extend-divd0.0-divq0.0-qv10-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes1280extend" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-extend-divd0.0-divq0.0-qv10-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes1280extend" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-extend-divd0.0-divq0.0-qv20-dv20-cosine-temp0.02-omodneither-dodefaulttrainno-embsize64 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes1280extend_20q" --colbert_qvecs 20 --colbert_dvecs 20 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-extend-divd0.0-divq0.0-qv50-dv50-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100k06bcolbertes1280extend_50q50d" --colbert_qvecs 50 --colbert_dvecs 50 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-Alibaba-NLP_gte-modernbert-base-bs16-e1-lr6e-05-fiqa_train_retrieval-extend-divd0.0-divq0.0-qv10-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 100 --save_preds "fiqaalibaba_q10extend_d128" --colbert_qvecs 10 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type single --model_name "Alibaba-NLP/gte-modernbert-base" --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 100 --save_preds "fiqaalibaba"  --forceredo "yes"
+
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name "lightonai/GTE-ModernColBERT-v1" --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 10 --save_preds "gtecolbert"  --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv10-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100kgoogblargebcolbertes128q1d10" --colbert_qvecs 1 --colbert_dvecs 10 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type colbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv100-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100kgoogblargebcolbertes128q1d100" --colbert_qvecs 1 --colbert_dvecs 100 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-maxsim-divd0.0-divq0.0-qv1-dv1-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100kgoogblargebcolbertes128q1d1" --colbert_qvecs 1 --colbert_dvecs 1 --forceredo "yes"
+
+# python scripts/wikipedia_eval.py --index_type singcolbert --model_name propercache/cache/colbert_training/contrastive-google-bert_bert-large-uncased-bs64-e1-lr6e-05-msmarco_100k-extend-divd0.0-divq0.0-qv40-dv40-cosine-temp0.02-omodneither-dodefaulttrainno-embsize128 --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "train100kgoogblargebcolbertes1280extend_40q40d" --colbert_qvecs 40 --colbert_dvecs 40 --forceredo "yes"

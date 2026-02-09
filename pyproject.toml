@@ -25,7 +25,8 @@ dependencies = [
     "nltk",
     "PyStemmer",
     "peft",
-    "matplotlib"
+    "matplotlib", 
+    "bitsandbytes"
 ]
 
 classifiers = [

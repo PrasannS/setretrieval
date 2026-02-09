@@ -1,5 +1,11 @@
 ### notebook that will get results for wikipedia eval set (TODO may add other datasets later)
-from setretrieval.inference.easy_indexer import BM25EasyIndexer, ColBERTEasyIndexer, SingleEasyIndexer, RandomEasyIndexer, TokenColBERTEasyIndexer
+# from setretrieval.inference.easy_indexer import BM25EasyIndexer, ColBERTEasyIndexer, SingleEasyIndexer, RandomEasyIndexer, TokenColBERTEasyIndexer
+from setretrieval.indexers.colbert_indexer import ColBERTEasyIndexer
+from setretrieval.indexers.singcolbert_indexer import SingColBERTEasyIndexer
+from setretrieval.indexers.colbert_faissindexer import TokenColBERTEasyIndexer
+from setretrieval.indexers.single_indexer import SingleEasyIndexer
+from setretrieval.indexers.simple_indexers import BM25EasyIndexer, RandomEasyIndexer
+from setretrieval.indexers.colbert_faissindexer import ColBERTMaxSimIndexer
 import argparse
 from datasets import Dataset
 import os
@@ -28,8 +34,12 @@ def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=Non
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
         indexer = ColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
+    elif indextype == "singcolbert":
+        indexer = SingColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
     elif indextype == "divcolbert": 
-        indexer = TokenColBERTEasyIndexer(model_name=modelname)
+        indexer = TokenColBERTEasyIndexer(model_name=modelname,)
+    elif indextype == "colbert_faiss":
+        indexer = ColBERTMaxSimIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
     elif indextype == "single":
         indexer = SingleEasyIndexer(model_name=modelname)
     elif indextype == "random": 
