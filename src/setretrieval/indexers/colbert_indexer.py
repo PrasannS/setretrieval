@@ -11,8 +11,8 @@ from setretrieval.indexers.colbert_model import ColBERTModelMixin
 
 class ColBERTEasyIndexer(ColBERTModelMixin, EasyIndexerBase):
     def __init__(self, model_name='nomic-ai/nomic-embed-text-v1', index_base_path='propercache/cache/colbert_indices',
-                 qmod_name=None, qvecs=-1, dvecs=-1, use_bsize=128, usefast=True):
-        self._init_colbert_model(model_name, qmod_name, qvecs, dvecs, use_bsize, usefast)
+                 qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=128, usefast=True):
+        self._init_colbert_model(model_name, qmod_name, qvecs, dvecs, passiveqvecs, passivedvecs, use_bsize, usefast)
         EasyIndexerBase.__init__(self, model_name, index_base_path, self.num_workers)
 
     def index_exists(self, index_id):

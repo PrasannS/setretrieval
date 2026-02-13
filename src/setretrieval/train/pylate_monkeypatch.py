@@ -91,9 +91,12 @@ def padded_tokenize(
         if type(texts[0]) == dict:
             texts = [text['text'] for text in texts]
 
+        # breakpoint()
         if passivevecs > 0:
             # add passive vectors to the end of the text, these should just allow for more computation
             texts = [text + " *" * passivevecs for text in texts]
+        
+        # breakpoint()
 
         # breakpoint()
 

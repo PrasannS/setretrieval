@@ -35,6 +35,8 @@ class ColBERTModelMixin:
         self.passivedvecs = passivedvecs
         self.models = []
 
+        # breakpoint()
+
         # Parse embedding size from model name (e.g. "model-embsize128")
         if "embsize" in model_name:
             es = model_name.split("embsize")[-1]

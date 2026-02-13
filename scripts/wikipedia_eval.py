@@ -29,17 +29,17 @@ def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precisio
     else:
         raise ValueError(f"Invalid metric: {metric}")
 
-def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=None, qvecs=-1, dvecs=-1, ebsize=128, usefast="yes"):
+def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, ebsize=128, usefast="yes"):
     if indextype == "bm25":
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
-        indexer = ColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
+        indexer = ColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, use_bsize=ebsize, usefast=usefast)
     elif indextype == "singcolbert":
-        indexer = SingColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
+        indexer = SingColBERTEasyIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, use_bsize=ebsize, usefast=usefast)
     elif indextype == "divcolbert": 
         indexer = TokenColBERTEasyIndexer(model_name=modelname,)
     elif indextype == "colbert_faiss":
-        indexer = ColBERTMaxSimIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, use_bsize=ebsize, usefast=usefast)
+        indexer = ColBERTMaxSimIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, use_bsize=ebsize, usefast=usefast)
     elif indextype == "single":
         indexer = SingleEasyIndexer(model_name=modelname)
     elif indextype == "random": 
@@ -51,12 +51,12 @@ def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=Non
     index_id = indexer.index_dataset(datasetpath, redo=redo)
     return indexer, index_id
 
-def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no", qmod_name=None, qvecs=-1, dvecs=-1, ebsize=128, usefast="yes"):
+def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no", qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, ebsize=128, usefast="yes"):
 
     eval_set = Dataset.load_from_disk(evalsetpath)
     eval_set = check_process_tset(eval_set)
 
-    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes", qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, ebsize=ebsize, usefast=usefast)
+    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes", qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, ebsize=ebsize, usefast=usefast)
     # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
     results = indexer.search(list(eval_set["question"]), index_id, k)
 
@@ -80,6 +80,8 @@ if __name__ == "__main__":
     parser.add_argument("--qmod_name", type=str, default=None)
     parser.add_argument("--colbert_qvecs", type=int, default=-1)
     parser.add_argument("--colbert_dvecs", type=int, default=-1)
+    parser.add_argument("--colbert_passiveqvecs", type=int, default=0)
+    parser.add_argument("--colbert_passivedvecs", type=int, default=0)
     parser.add_argument("--colbert_ebsize", type=int, default=128)
     parser.add_argument("--colbert_usefast", type=str, default="yes")
     args = parser.parse_args()
@@ -104,7 +106,7 @@ if __name__ == "__main__":
         print(f"Loading results from cache for {resultkey}")
         metres = metresults[methodkey]
     else:
-        metres, questions, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo, args.qmod_name, args.colbert_qvecs, args.colbert_dvecs, args.colbert_ebsize, args.colbert_usefast)
+        metres, questions, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo, args.qmod_name, args.colbert_qvecs, args.colbert_dvecs, args.colbert_passiveqvecs, args.colbert_passivedvecs, args.colbert_ebsize, args.colbert_usefast)
         metresults[methodkey] = metres
         pickdump(metresults, "propercache/cache/setresults/"+resultkey+".pkl")
         if len(args.save_preds) > 0:

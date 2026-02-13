@@ -3,7 +3,7 @@
 
 import argparse
 
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 from sentence_transformers import (
     SentenceTransformer,
     SentenceTransformerTrainer,
@@ -22,36 +22,58 @@ def main(args):
     model_name = args.model_name
     model_shortname = model_name.split("/")[-1]
 
+    if args.dataset == "reasonir":
+        document_length = 8192
+        query_length = 128
+    else:
+        document_length = 2000
+        query_length = 32
     # 1. Load pylate model to finetune
     model = models.ColBERT(
         model_name_or_path=model_name, 
         model_kwargs={'dtype': torch.bfloat16}, 
-        embedding_size=args.embdim
+        embedding_size=args.embdim,
+        document_length=document_length, 
+        query_length=query_length,
+        skiplist_words=[],
     )
     if args.qvecs != -1 and args.dvecs != -1:
         model.tokenizer.query_vectors = args.qvecs
         model.tokenizer.doc_vectors = args.dvecs
+        model.tokenizer.qpass_vecs = args.passiveqvecs
+        model.tokenizer.dpass_vecs = args.passivedvecs
 
     # 2. Load a dataset to finetune on
-    dataset = load_dataset(
-        "sentence-transformers/msmarco-co-condenser-margin-mse-sym-mnrl-mean-v1",
-        "triplet-hard",
-        split="train",
-    )
-    dataset_dict = dataset.train_test_split(test_size=1_000, seed=12)
-    train_dataset = dataset_dict["train"].select(range(1_250_000))
-    # train_dataset = dataset_dict["train"].select(range(100_000))
+    if args.dataset == "msmarco":
+        dataset = load_dataset(
+            "sentence-transformers/msmarco-co-condenser-margin-mse-sym-mnrl-mean-v1",
+            "triplet-hard",
+            split="train",
+        )
+        dataset_dict = dataset.train_test_split(test_size=1_000, seed=12)
+        debug = False
+        if debug:
+            train_dataset = dataset_dict["train"].select(range(10_000))
+        else:
+            train_dataset = dataset_dict["train"].select(range(1_250_000))
 
-    eval_dataset = dataset_dict["test"]
+        eval_dataset = dataset_dict["test"]
+    elif args.dataset == "reasonir":
+        dataset = DatasetDict.load_from_disk("propercache/data/colbert_training/reasonir_hq_formatted")
+        train_dataset = dataset["train"]
+        eval_dataset = dataset["test"]
 
+    oldlen = len(train_dataset)
+    train_dataset = train_dataset.filter(lambda x: len(x["query"]) < 8000)
+    print("Old length: ", oldlen, "New length: ", len(train_dataset))
     # 3. Define a loss function
     if args.qvecs != -1 and args.dvecs != -1:
         scmet = mod_colbert_scores if args.colscore == "maxsim" else extend_vector_scores
         print(f"Using {args.colscore} score metric")
-        loss = losses.CachedContrastive(model, mini_batch_size=16, temperature=0.05, score_metric=scmet)  # Increase mini_batch_size if you have enough VRAM
+        loss = losses.CachedContrastive(model, mini_batch_size=args.mini_batch_size, temperature=args.temperature, score_metric=scmet)  # Increase mini_batch_size if you have enough VRAM
     else:
-        loss = losses.CachedContrastive(model, mini_batch_size=16, temperature=0.05)  # Increase mini_batch_size if you have enough VRAM
-    run_name = f"{model_shortname}-pylate-pairwise-{lr}-qv{args.qvecs}-dv{args.dvecs}-embsize{args.embdim}"
+        loss = losses.CachedContrastive(model, mini_batch_size=args.mini_batch_size, temperature=args.temperature)  # Increase mini_batch_size if you have enough VRAM
+    run_name = f"{model_shortname}-pylate-pairwise-{args.dataset}-{lr}-qv{args.qvecs}-dv{args.dvecs}-pqv{args.passiveqvecs}-pdv{args.passivedvecs}-embsize{args.embdim}"
     if args.colscore != "maxsim":
         run_name += f"-{args.colscore}"
     # 4. (Optional) Specify training arguments
@@ -59,13 +81,12 @@ def main(args):
         # Required parameter:
         output_dir=f"output/{model_shortname}/{run_name}",
         # Optional training parameters:
-        num_train_epochs=1,
-        per_device_train_batch_size=512,
-        per_device_eval_batch_size=512,
+        num_train_epochs=args.epochs,
+        per_device_train_batch_size=args.big_batch_size,
+        per_device_eval_batch_size=args.big_batch_size,
         warmup_ratio=0.05,
         fp16=False,  # Set to False if GPU can't handle FP16
         bf16=True,  # Set to True if GPU supports BF16
-        batch_sampler=BatchSamplers.NO_DUPLICATES,  # (Cached)MultipleNegativesRankingLoss benefits from no duplicates
         learning_rate=lr,
         # Optional tracking/debugging parameters:
         save_strategy="steps",
@@ -73,9 +94,9 @@ def main(args):
         save_total_limit=2,
         logging_steps=2,
         run_name=run_name,  # Used in `wandb`, `tensorboard`, `neptune`, etc. if installed
-        dataloader_num_workers=8,
-        dataloader_pin_memory=False,
+        dataloader_pin_memory=True,
         dataloader_drop_last=True,
+        ddp_find_unused_parameters=False,
     )
 
     # 5. (Optional) Create an evaluator & evaluate the base model
@@ -116,7 +137,14 @@ if __name__ == "__main__":
     parser.add_argument("--embdim", type=int, default=128)
     parser.add_argument("--qvecs", type=int, default=-1)
     parser.add_argument("--dvecs", type=int, default=-1)
+    parser.add_argument("--passiveqvecs", type=int, default=0)
+    parser.add_argument("--passivedvecs", type=int, default=0)
     parser.add_argument("--colscore", type=str, default="maxsim")
+    parser.add_argument("--mini_batch_size", type=int, default=16)
+    parser.add_argument("--dataset", type=str, default="msmarco")
+    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--big_batch_size", type=int, default=512)
+    parser.add_argument("--temperature", type=float, default=0.05)
     args = parser.parse_args()
     if args.qvecs != -1 and args.dvecs != -1:
         print("Monkey patching ColBERT model")

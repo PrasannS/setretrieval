@@ -1,3 +1,24 @@
+#!/bin/bash
+#SBATCH --job-name=modernbert-pylate
+#SBATCH --output=modernbert-pylate-%j.log
+#SBATCH --error=modernbert-pylate-%j.err
+#SBATCH --time=24:00:00
+#SBATCH --gpus=8
+#SBATCH --cpus-per-task=128
+#SBATCH --mem=800GB
+source /system/linux/miniforge-3.12/etc/profile.d/conda.sh
+conda activate scaling7
+
+torchrun --nproc_per_node=8 scripts/train_pylate_pairwise.py --qvecs 1 --dvecs 1 --passiveqvecs 0 --passivedvecs 0 --embdim 1024 --lr 3e-4 --mini_batch_size 16 --model_name "answerdotai/ModernBERT-large"
+torchrun --nproc_per_node=8 scripts/train_pylate_pairwise.py --qvecs 1 --dvecs 10 --passiveqvecs 0 --passivedvecs 0 --embdim 1024 --lr 3e-4 --mini_batch_size 16 --model_name "answerdotai/ModernBERT-large"
+torchrun --nproc_per_node=8 scripts/train_pylate_pairwise.py --qvecs 1 --dvecs 100 --passiveqvecs 0 --passivedvecs 0 --embdim 1024 --lr 3e-4 --mini_batch_size 16 --model_name "answerdotai/ModernBERT-large"
+torchrun --nproc_per_node=8 scripts/train_pylate_pairwise.py --qvecs 100 --dvecs 500 --passiveqvecs 0 --passivedvecs 0 --embdim 1024 --lr 3e-4 --mini_batch_size 16 --model_name "answerdotai/ModernBERT-large"
+
+# torchrun --nproc_per_node=6 scripts/train_pylate_pairwise.py --qvecs 1 --dvecs 100 --passiveqvecs 0 --passivedvecs 0 --embdim 128 --lr 1e-5 --mini_batch_size 16 --dataset "reasonir" --epochs 3 --big_batch_size 128 --temperature 1
+# torchrun --nproc_per_node=6 scripts/train_pylate_pairwise.py --qvecs 10 --dvecs 100 --passiveqvecs 0 --passivedvecs 0 --embdim 128 --lr 1e-5 --mini_batch_size 16 --dataset "reasonir" --epochs 3 --big_batch_size 128 --temperature 1
+# torchrun --nproc_per_node=6 scripts/train_pylate_pairwise.py --qvecs 100 --dvecs 100 --passiveqvecs 0 --passivedvecs 0 --embdim 128 --lr 1e-5 --mini_batch_size 16 --dataset "reasonir" --epochs 3 --big_batch_size 128 --temperature 1
+# torchrun --nproc_per_node=6 scripts/train_pylate_pairwise.py --qvecs 100 --dvecs 500 --passiveqvecs 0 --passivedvecs 0 --embdim 128 --lr 1e-5 --mini_batch_size 16 --dataset "reasonir" --epochs 3 --big_batch_size 128 --temperature 1
+
 # torchrun --nproc_per_node=8 scripts/train.py > logs/train$(date +%Y%m%d_%H%M%S).log 2>&1 &
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 32 --num_epochs 3 --learning_rate 3e-6 > logs/train$(date +%Y%m%d_%H%M%S).log 2>&1 &
 
@@ -256,7 +277,7 @@
 
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 64 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "msmarco_100k" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 40 --doclen 40 --colscore "extend"
 
-torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 1 --doclen 1 --colscore "extend"
+# torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 1 --doclen 1 --colscore "extend"
 
 # torchrun --nproc_per_node=8 scripts/train.py --batch_size 16 --num_epochs 1 --learning_rate 6e-5 --model_name "google-bert/bert-large-uncased" --traintype "colbert" --divq_coeff 0 --dataset "fiqa_train_retrieval" --div_coeff 0 --temp 0.02 --dodefaulttrain "no" --compile "no" --gcheck "no" --embsize 128 --querylen 10 --doclen 10 --colscore "extend"
 
