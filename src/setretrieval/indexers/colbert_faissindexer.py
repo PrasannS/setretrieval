@@ -128,8 +128,9 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
 
     def __init__(self, model_name='nomic-ai/nomic-embed-text-v1',
                  index_base_path='propercache/cache/colbert_indices',
-                 qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=128, usefast=True):
+                 qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=128, usefast=True, detailed_save="no"):
         super().__init__(model_name, index_base_path, qmod_name, qvecs, dvecs, passiveqvecs, passivedvecs, use_bsize, usefast)
+        self.detailed_save = detailed_save
 
     def search(self, queries, index_id, k=100, k_tokens=5000):
         """
@@ -151,13 +152,14 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
         results = []
         token_map = self.token_to_doc_map[index_id]
         num_docs = len(self.documents[index_id])
+        detailed_preds = []
 
         for query_embed in tqdm(query_embeds, desc="Searching with MaxSim"):
             num_query_tokens = query_embed.shape[0]
             doc_scores = np.zeros(num_docs, dtype=np.float32)
 
             scores, indices = self.indices[index_id].search(query_embed, k_tokens)
-
+            detailed_preds.append((scores, indices))
             for query_token_idx in range(num_query_tokens):
                 token_scores = scores[query_token_idx]
                 token_indices = indices[query_token_idx]
@@ -183,4 +185,6 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
 
             results.append(query_results)
 
+        if self.detailed_save is not "no":
+            pickdump(detailed_preds, os.path.join("propercache/cache/detailed_preds", f"{index_id}_{self.detailed_save}.pkl"))
         return results

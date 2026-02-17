@@ -14,16 +14,24 @@ export OMP_NUM_THREADS=128
 CORPUS=propercache/data/datastores/fiqacorpus
 MODEL=gemini-2.5-flash-lite
 
-# Shorten
-python -u scripts/transform_corpus.py \
-    --corpus_path $CORPUS \
-    --mode shorten \
-    --output_path propercache/data/datastores/fiqacorpus_short \
-    --model $MODEL
+# # Shorten
+# python -u scripts/transform_corpus.py \
+#     --corpus_path $CORPUS \
+#     --mode shorten \
+#     --output_path propercache/data/datastores/fiqacorpus_short \
+#     --model $MODEL
 
-# Lengthen
-python -u scripts/transform_corpus.py \
+# # Lengthen
+# python -u scripts/transform_corpus.py \
+#     --corpus_path $CORPUS \
+#     --mode lengthen \
+#     --output_path propercache/data/datastores/fiqacorpus_long \
+#     --model $MODEL
+
+# Make transformed eval sets and pos/neg-only corpora
+python -u scripts/make_transformed_evalsets.py \
     --corpus_path $CORPUS \
-    --mode lengthen \
-    --output_path propercache/data/datastores/fiqacorpus_long \
-    --model $MODEL
+    --short_corpus_path propercache/data/datastores/fiqacorpus_short \
+    --long_corpus_path propercache/data/datastores/fiqacorpus_long \
+    --eval_set_path propercache/data/evalsets/fiqa_testset \
+    --output_dir propercache/data

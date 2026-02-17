@@ -72,6 +72,8 @@ def main():
             else:
                 print(f"Failed for doc (keeping original): {result.get('error', 'unknown')}")
                 transformed.append(orig)
+        # print total cost so far
+        print(f"Total cost so far: ${client.total_cost:.4f}")
 
     if args.debug:
         print("\n" + "=" * 80)

@@ -650,6 +650,13 @@ nanofiqaeval() {
     python scripts/wikipedia_eval.py --index_type $INDEX_TYPE --model_name $MODEL --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds $SAVE_PREDS --colbert_qvecs $QVECS --colbert_dvecs $DVECS --forceredo $FORCE --colbert_passiveqvecs $PASSIVEQVECS --colbert_passivedvecs $PASSIVEDVECS
     python scripts/wikipedia_eval.py --index_type $INDEX_TYPE --model_name $MODEL --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 1 --save_preds $SAVE_PREDS --colbert_qvecs $QVECS --colbert_dvecs $DVECS --forceredo $FORCE --colbert_passiveqvecs $PASSIVEQVECS --colbert_passivedvecs $PASSIVEDVECS
 }
+# nanofiqaeval "ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv400-pqv0-pdv0-embsize128/final" 1 400 128 "yes" "paircolbnormalq1d400embsize128" "colbert"
+
+
+python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/nqcorpus_bm25 --eval_set_path propercache/data/evalsets/nq_testset --k 1 --save_preds "bm25" 
+python scripts/wikipedia_eval.py --index_type bm25 --model_name bm25 --dataset_path propercache/data/datastores/nqcorpus_bm25 --eval_set_path propercache/data/evalsets/nq_testset --k 10 --save_preds "bm25" 
+
+
 
 # python scripts/wikipedia_eval.py --index_type colbert --model_name ModernBERT/output/ModernBERT-base/ModernBERT-base-pylate-pairwise-8e-05-qv-1-dv-1-embsize128/final --dataset_path propercache/data/datastores/nanomsmarco_corpus --eval_set_path propercache/data/evalsets/nanomsmarco_evalset --k 1 --save_preds "paircolbnormal" 
 

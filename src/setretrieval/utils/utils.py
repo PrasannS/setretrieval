@@ -29,5 +29,5 @@ def check_process_tset(tset):
 def preds_to_chunks(preds, ds): 
     chunks = []
     for plist in preds: 
-        chunks.append([ds[p['index']]['text'] for p in plist])
+        chunks.append([ds[int(p['index'])]['text'] for p in plist])
     return chunks
