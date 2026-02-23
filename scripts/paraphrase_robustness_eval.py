@@ -32,7 +32,7 @@ from setretrieval.indexers.colbert_faissindexer import ColBERTMaxSimIndexer
 from setretrieval.inference.oai_request_client import ParallelResponsesClient, PRICING
 from setretrieval.utils.utils import check_process_tset
 
-def paraphrase_texts(texts, prompt_template, llm_model, max_concurrent=100):
+def paraphrase_texts(texts, prompt_template, llm_model, max_concurrent=100, concat_original=False):
     """Paraphrase a list of texts using an LLM via ParallelResponsesClient.
 
     Args:
@@ -51,7 +51,10 @@ def paraphrase_texts(texts, prompt_template, llm_model, max_concurrent=100):
     paraphrased = []
     for orig, result in zip(texts, results):
         if result["success"] and result["response"]:
-            paraphrased.append(result["response"])
+            if concat_original:
+                paraphrased.append(orig + " " + result["response"])
+            else:
+                paraphrased.append(result["response"])
         else:
             print(f"  Warning — paraphrase failed (keeping original): {result.get('error', 'unknown')}")
             paraphrased.append(orig)
@@ -76,6 +79,7 @@ def eval_with_paraphrased_chunks(
     max_concurrent=100,
     cache_dir="propercache/cache/paraphrase_eval",
     force_paraphrase=False,
+    concat_original=False,
 ):
     assert "{}" in paraphrase_prompt, "paraphrase_prompt must contain '{}' as the text placeholder"
     assert mode in ("pos", "neg", "all", "none"), "mode must be one of: pos, neg, all"
@@ -129,13 +133,20 @@ def eval_with_paraphrased_chunks(
         # --- Cache the modified corpus so re-runs with same config are cheap -----
         prompt_hash = hashlib.sha256(paraphrase_prompt.encode()).hexdigest()[:12]
         corpus_cache_key = f"{mode}_{llm_model.replace('/', '_')}_{prompt_hash}"
+        if concat_original:
+            corpus_cache_key += "_concoriginal"
         modified_corpus_path = os.path.join(cache_dir, "corpora", corpus_cache_key)
 
         sorted_indices = sorted(to_paraphrase)
         texts_to_paraphrase = [corpus_texts[i] for i in sorted_indices]
         print(f"Paraphrasing {len(texts_to_paraphrase):,} docs with {llm_model}...")
-        paraphrased = paraphrase_texts(texts_to_paraphrase, paraphrase_prompt, llm_model, max_concurrent)
+        paraphrased = paraphrase_texts(texts_to_paraphrase, paraphrase_prompt, llm_model, max_concurrent, concat_original)
 
+        print("Examples of before / after:")
+        for i in range(5): 
+            print(f"Before: {texts_to_paraphrase[i]}")
+            print(f"After: {paraphrased[i]}")
+            print()
         new_texts = corpus_texts.copy()
         for idx, new_text in zip(sorted_indices, paraphrased):
             new_texts[idx] = new_text
@@ -147,7 +158,9 @@ def eval_with_paraphrased_chunks(
 
     # --- Build ColBERT index on the modified corpus --------------------------
     indexer = ColBERTMaxSimIndexer(model_name=model_name)
-    index_id = indexer.index_dataset(modified_corpus_path)
+    index_id = indexer.index_dataset(corpus_path)
+    if modified_corpus_path != corpus_path:
+        indexer.smallupdate_index(index_id, modified_dataset, modified_corpus_path)
 
     # TODO maybe want to clean up / debug how index re-usage works a little bit...
 
@@ -219,6 +232,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Redo paraphrasing even if a cached modified corpus exists",
     )
+    parser.add_argument(
+        "--concat_original", 
+        action="store_true",
+        help="Concat the original corpus to the modified corpus",
+    )
     args = parser.parse_args()
 
     eval_set = Dataset.load_from_disk(args.eval_set_path)
@@ -235,6 +253,7 @@ if __name__ == "__main__":
         max_concurrent=args.max_concurrent,
         cache_dir=args.cache_dir,
         force_paraphrase=args.force_paraphrase,
+        concat_original=args.concat_original,
     )
 
     print(f"\n--- Results (k={args.k}, mode={args.mode}) ---")

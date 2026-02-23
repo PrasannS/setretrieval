@@ -59,8 +59,11 @@ class ColBERTFaissTokenIndexer(ColBERTModelMixin, EasyIndexerBase):
         print("Building FAISS index...")
         embedding_dim = all_token_vectors.shape[1]
         print(f"Number of token vectors: {len(all_token_vectors)} for {len(documents)} documents")
-        index = faiss.IndexFlatIP(embedding_dim)  # Inner product for ColBERT
-        index.add(all_token_vectors)
+        base_index = faiss.IndexFlatIP(embedding_dim)  # Inner product for ColBERT
+        index = faiss.IndexIDMap(base_index)
+
+        ids = np.arange(len(all_token_vectors)).astype(np.int64)
+        index.add_with_ids(all_token_vectors, ids)
 
         # Save index and mappings
         faiss.write_index(index, os.path.join(self.index_base_path, f"{index_id}.faiss"))
@@ -208,21 +211,99 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
             pickdump(detailed_preds, os.path.join("propercache/cache/detailed_preds", f"{index_id}_{self.detailed_save}.pkl"))
         return results
 
-    # update the index with a small number of new documents ()
-    def smallupdate_index(self, index_id, new_documents, new_id):
+
+    # TODO this was too complicated, maybe do this later or vibe code it later when it's more important.
+    # # update the index with a small number of new documents ()
+    def smallupdate_index(self, index_id, new_documents, new_id=None):
 
         self.try_load_cached(index_id)
         self.load_model()
 
-        # figure out what indices are new: 
-        docs = self.documents[index_id]
-        assert len(self.documents[index_id]) == len(new_documents)
-        replace_inds = [i for i in range(len(docs)) if docs[i]['text'] != new_documents[i]['text']]
-        self.indices[index_id].remove_ids(replace_inds)
+        old_dataset = self.documents[index_id]
+        old_texts = [old_dataset[i]["text"] for i in range(len(old_dataset))]
 
-        # get new embeddings
-        new_embeds = self.model.encode(new_documents, batch_size=32, is_query=False, show_progress_bar=True)
-        new_embeds = np.array(new_embeds)
-        self.indices[index_id].add_with_ids(new_embeds, replace_inds)
+        assert len(old_texts) == len(new_documents), "Currently requires same number of documents"
 
+        # Identify changed documents
+        replace_inds = [i for i in range(len(old_texts)) if old_texts[i] != new_documents[i]['text']]
+
+        print(f"Updating {len(replace_inds)} documents")
+
+        # Remove all token ids belonging to changed docs
+        token_map = self.token_to_doc_map[index_id]
+        repinds = set(replace_inds)
+
+        remove_token_ids = [token_id for token_id, (doc_id, _) in enumerate(token_map) if doc_id in repinds]
+        remove_token_ids = np.array(remove_token_ids, dtype=np.int64)
+
+        # breakpoint()
+        self.indices[index_id].remove_ids(remove_token_ids)
+
+        # Re-embed changed documents
+        changed_texts = [new_documents[i]['text'] for i in replace_inds]
+
+        new_embeds = self.model.encode(
+            changed_texts,
+            batch_size=32,
+            is_query=False,
+            show_progress_bar=True
+        )
+
+        #  Add new token vectors with NEW unique ids
+        current_max_id = len(token_map)
+        new_token_ids, new_token_vectors, new_token_entries = [], [], []
+
+        next_id = current_max_id
+
+        for doc_local_idx, doc_id in enumerate(replace_inds):
+            doc_embed = new_embeds[doc_local_idx]
+
+            for token_idx in range(doc_embed.shape[0]):
+                new_token_vectors.append(doc_embed[token_idx])
+                new_token_ids.append(next_id)
+                new_token_entries.append((doc_id, token_idx))
+                next_id += 1
+
+        # assume that we will have new token vectors
+        new_token_vectors = np.array(new_token_vectors, dtype=np.float32)
+        new_token_ids = np.array(new_token_ids, dtype=np.int64)
+
+        self.indices[index_id].add_with_ids(new_token_vectors, new_token_ids)
+
+        # Update token_to_doc_map
+        # We DO NOT delete old entries — we mark them invalid by setting to None
+        for token_id in remove_token_ids:
+            token_map[token_id] = None
+
+        # Extend map to accommodate new ids
+        if len(token_map) < next_id:
+            token_map.extend([None] * (next_id - len(token_map)))
+
+        for token_id, entry in zip(new_token_ids, new_token_entries):
+            token_map[token_id] = entry
+
+        self.token_to_doc_map[index_id] = token_map
+
+        # -------------------------------------------------
+        # Update document dataset
+        # -------------------------------------------------
+        self.documents[index_id] = new_documents
+
+        # Persist everything
+        if False:
+            faiss.write_index(
+                self.indices[index_id],
+                os.path.join(self.index_base_path, f"{index_id}.faiss")
+            )
+
+            pickdump(
+                token_map,
+                os.path.join(self.index_base_path, f"{index_id}_token_map.pkl")
+            )
+
+            self.documents[index_id].save_to_disk(
+                os.path.join(self.index_base_path, f"{index_id}")
+            )
+
+            print("Index successfully updated.")
 

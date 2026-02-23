@@ -94,12 +94,12 @@ def padded_tokenize(
             texts = [text['text'] for text in texts]
 
         # filter stuff longer than 10k chars
-        overcnt = sum([len(text) > 6700 for text in texts])
+        overcnt = sum([len(text) > 10000 for text in texts])
         if overcnt > 0:
-            print([len(text) for text in texts])
+            # print([len(text) for text in texts])
             # breakpoint()
             print(f"WARNING: {overcnt} texts were longer than 10k chars, filtering them out")
-            texts = [text[:6700] for text in texts]
+            texts = [text[:10000] for text in texts]
         
 
         # breakpoint()
