@@ -65,6 +65,7 @@ class ColBERTFaissTokenIndexer(ColBERTModelMixin, EasyIndexerBase):
         # Save index and mappings
         faiss.write_index(index, os.path.join(self.index_base_path, f"{index_id}.faiss"))
         pickdump(token_map, os.path.join(self.index_base_path, f"{index_id}_token_map.pkl"))
+        pickdump(list(embeds), os.path.join(self.index_base_path, f"{index_id}_doc_embeds.pkl"))
 
         self.documents[index_id] = Dataset.from_dict({"text": documents})
         self.documents[index_id].save_to_disk(os.path.join(self.index_base_path, f"{index_id}"))
@@ -132,7 +133,7 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
         super().__init__(model_name, index_base_path, qmod_name, qvecs, dvecs, passiveqvecs, passivedvecs, use_bsize, usefast)
         self.detailed_save = detailed_save
 
-    def search(self, queries, index_id, k=100, k_tokens=5000):
+    def search(self, queries, index_id, k=100, k_tokens=1000, indbsize=16):
         """
         Standard ColBERT search using MaxSim scoring.
 
@@ -154,37 +155,74 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
         num_docs = len(self.documents[index_id])
         detailed_preds = []
 
-        for query_embed in tqdm(query_embeds, desc="Searching with MaxSim"):
-            num_query_tokens = query_embed.shape[0]
-            doc_scores = np.zeros(num_docs, dtype=np.float32)
+        for batch_start in tqdm(range(0, len(query_embeds), indbsize), desc="Searching with MaxSim"):
+            batch_query_embeds = query_embeds[batch_start:batch_start + indbsize]
 
-            scores, indices = self.indices[index_id].search(query_embed, k_tokens)
-            detailed_preds.append((scores, indices))
-            for query_token_idx in range(num_query_tokens):
-                token_scores = scores[query_token_idx]
-                token_indices = indices[query_token_idx]
+            # Keep track of how many tokens each query has
+            token_counts = [qe.shape[0] for qe in batch_query_embeds]
 
-                doc_max_for_query_token = {}
-                for j in range(k_tokens):
-                    doc_token_idx = token_indices[j]
-                    doc_id = int(token_map[doc_token_idx][0])
-                    score = float(token_scores[j])
+            # Concatenate into one big matrix
+            concat_query_embed = np.concatenate(batch_query_embeds, axis=0)
 
-                    if doc_id not in doc_max_for_query_token or score > doc_max_for_query_token[doc_id]:
-                        doc_max_for_query_token[doc_id] = score
+            # 🔹 SINGLE batched FAISS call
+            scores_all, indices_all = self.indices[index_id].search(concat_query_embed, k_tokens)
 
-                for doc_id, max_score in doc_max_for_query_token.items():
-                    doc_scores[doc_id] += max_score
+            detailed_preds.append((scores_all, indices_all))
 
-            top_k_doc_ids = np.argsort(doc_scores)[::-1][:k]
-            query_results = [{
-                'index': int(doc_id),
-                'score': float(doc_scores[doc_id]),
-                'index_id': index_id
-            } for doc_id in top_k_doc_ids]
+            # Now split results back per query
+            offset = 0
+            for qi, num_query_tokens in enumerate(token_counts):
+                scores = scores_all[offset:offset + num_query_tokens]
+                indices = indices_all[offset:offset + num_query_tokens]
+                offset += num_query_tokens
 
-            results.append(query_results)
+                # ---- FROM HERE DOWN YOUR ORIGINAL CODE IS IDENTICAL ----
+                doc_scores = np.zeros(num_docs, dtype=np.float32)
+
+                for query_token_idx in range(num_query_tokens):
+                    token_scores = scores[query_token_idx]
+                    token_indices = indices[query_token_idx]
+
+                    doc_max_for_query_token = {}
+                    for j in range(k_tokens):
+                        doc_token_idx = token_indices[j]
+                        doc_id = int(token_map[doc_token_idx][0])
+                        score = float(token_scores[j])
+
+                        if doc_id not in doc_max_for_query_token or score > doc_max_for_query_token[doc_id]:
+                            doc_max_for_query_token[doc_id] = score
+
+                    for doc_id, max_score in doc_max_for_query_token.items():
+                        doc_scores[doc_id] += max_score
+
+                top_k_doc_ids = np.argsort(doc_scores)[::-1][:k]
+                query_results = [{
+                    'index': int(doc_id),
+                    'score': float(doc_scores[doc_id]),
+                    'index_id': index_id
+                } for doc_id in top_k_doc_ids]
+
+                results.append(query_results)
 
         if self.detailed_save is not "no":
             pickdump(detailed_preds, os.path.join("propercache/cache/detailed_preds", f"{index_id}_{self.detailed_save}.pkl"))
         return results
+
+    # update the index with a small number of new documents ()
+    def smallupdate_index(self, index_id, new_documents, new_id):
+
+        self.try_load_cached(index_id)
+        self.load_model()
+
+        # figure out what indices are new: 
+        docs = self.documents[index_id]
+        assert len(self.documents[index_id]) == len(new_documents)
+        replace_inds = [i for i in range(len(docs)) if docs[i]['text'] != new_documents[i]['text']]
+        self.indices[index_id].remove_ids(replace_inds)
+
+        # get new embeddings
+        new_embeds = self.model.encode(new_documents, batch_size=32, is_query=False, show_progress_bar=True)
+        new_embeds = np.array(new_embeds)
+        self.indices[index_id].add_with_ids(new_embeds, replace_inds)
+
+

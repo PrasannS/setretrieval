@@ -21,5 +21,6 @@ nanofiqaeval "output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-
 nanofiqaeval "output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final" 1 100 128 "yes" "paircolbnormalq1d100embsize128" "colbert_faiss" 0 0
 # 32 100
 nanofiqaeval "output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv32-dv100-embsize128/final" 32 100 128 "yes" "paircolbnormalq32d100embsize128" "colbert_faiss" 0 0
-
+# 1 400
+nanofiqaeval "output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv400-embsize128/final" 1 400 128 "yes" "paircolbnormalq1d400embsize128" "colbert_faiss" 0 0
 # ssh -t -t prasann@lambda.stat.berkeley.edu -L 8888:localhost:8888 ssh lambda-hyperplane02 -L 8888:localhost:8888

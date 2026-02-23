@@ -27,6 +27,7 @@ def newforward(self, input: dict[str, Tensor], **kwargs) -> dict[str, Tensor]:
         mask = (input["input_ids"] == self._first_module().tokenizer.cls_token_id) & (input["attention_mask"] == 1)  # Shape: [batch_size, seq_len]
         # ignore cls token
         mask[:, 0] = False
+        # breakpoint()
         # only select token_embeddings from outs that are masked
         outs['token_embeddings'] = outs['token_embeddings'][mask].view(outs['token_embeddings'].size(0), -1, outs['token_embeddings'].size(-1))
     # print(outs['token_embeddings'].shape)
@@ -59,8 +60,9 @@ def padded_tokenize(
         # Set max sequence length based on whether the input is a query or document
         # max_length = self.query_length if is_query else self.document_length
         # # TODO this should be tokenizer max length
-        if self._first_module().max_seq_length in [512, 32768]: # this is to handle weirdness from prefix token
+        if self._first_module().max_seq_length in [512, 8192, 32768]: # this is to handle weirdness from prefix token
             self._first_module().max_seq_length = self._first_module().max_seq_length - 1
+        
         # print(f"WARNING: HARD-CODED MAX SEQ LENGTH TO 511")
         # HACK ok I think this was usually padding to max length which was killing memory for qwen I'm assuming
         # need to fix this up a bit
@@ -90,6 +92,15 @@ def padded_tokenize(
 
         if type(texts[0]) == dict:
             texts = [text['text'] for text in texts]
+
+        # filter stuff longer than 10k chars
+        overcnt = sum([len(text) > 6700 for text in texts])
+        if overcnt > 0:
+            print([len(text) for text in texts])
+            # breakpoint()
+            print(f"WARNING: {overcnt} texts were longer than 10k chars, filtering them out")
+            texts = [text[:6700] for text in texts]
+        
 
         # breakpoint()
         if passivevecs > 0:

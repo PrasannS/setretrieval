@@ -13,6 +13,7 @@ data/
 *.err
 # C extensions
 *.so
+*.png
 
 # Distribution / packaging
 .Python

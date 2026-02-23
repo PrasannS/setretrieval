@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--output_dir", type=str, required=True)
     args = parser.parse_args()
 
-    breakpoint()
+    # breakpoint()
     corpus = load_from_disk(args.corpus_path)
     short_corpus = load_from_disk(args.short_corpus_path)
     long_corpus = load_from_disk(args.long_corpus_path)

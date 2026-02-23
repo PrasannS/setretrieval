@@ -28,10 +28,16 @@ MODEL=gemini-2.5-flash-lite
 #     --output_path propercache/data/datastores/fiqacorpus_long \
 #     --model $MODEL
 
+# python -u scripts/transform_corpus.py \
+#     --corpus_path $CORPUS \
+#     --mode lengthen2 \
+#     --output_path propercache/data/datastores/fiqacorpus_longv2 \
+#     --model $MODEL
+
 # Make transformed eval sets and pos/neg-only corpora
 python -u scripts/make_transformed_evalsets.py \
     --corpus_path $CORPUS \
     --short_corpus_path propercache/data/datastores/fiqacorpus_short \
-    --long_corpus_path propercache/data/datastores/fiqacorpus_long \
+    --long_corpus_path propercache/data/datastores/fiqacorpus_longv2 \
     --eval_set_path propercache/data/evalsets/fiqa_testset \
-    --output_dir propercache/data
+    --output_dir propercache/datatmp

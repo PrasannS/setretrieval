@@ -60,7 +60,7 @@ nltk.download("omw-1.4", quiet=True)
 # 1.  VOCABULARY / TOKENIZER
 # ════════════════════════════════════════════════════════════════════════════
 
-def build_wordnet_vocab(max_words: int = 2000, pretrained_tokenizer=None) -> List[str]:
+def build_wordnet_vocab(max_words: int = 20000, pretrained_tokenizer=None) -> List[str]:
     """Return a sorted list of short, common English WordNet lemmas.
 
     If pretrained_tokenizer is given, filter to words that are single tokens
@@ -452,10 +452,24 @@ def pad_collate(batch: List[Dict], pad_id: int, max_pos: int = 512) -> Dict[str,
 # 5.  METRICS
 # ════════════════════════════════════════════════════════════════════════════
 
+def _unordered_match(pred_tgt: np.ndarray, true_tgt: np.ndarray) -> int:
+    """Count how many predicted tokens can be matched to target tokens (multiset intersection)."""
+    remaining = list(true_tgt)
+    matched = 0
+    for p in pred_tgt:
+        if p in remaining:
+            remaining.remove(p)
+            matched += 1
+    return matched
+
+
 def compute_exact_match(
-    predictions: np.ndarray, labels: np.ndarray
+    predictions: np.ndarray, labels: np.ndarray, unordered: bool = False
 ) -> Dict[str, float]:
-    """Token-level and sequence-level exact match on the target segment only."""
+    """Token-level and sequence-level exact match on the target segment only.
+
+    If unordered=True, uses multiset matching (order doesn't matter).
+    """
     token_correct = token_total = seq_correct = seq_total = 0
     for i in range(predictions.shape[0]):
         mask     = labels[i] != -100
@@ -463,7 +477,10 @@ def compute_exact_match(
         true_tgt = labels[i][mask]
         if len(true_tgt) == 0:
             continue
-        n_ok = int((pred_tgt == true_tgt).sum())
+        if unordered:
+            n_ok = _unordered_match(pred_tgt, true_tgt)
+        else:
+            n_ok = int((pred_tgt == true_tgt).sum())
         token_correct += n_ok
         token_total   += len(true_tgt)
         seq_correct   += int(n_ok == len(true_tgt))
@@ -474,12 +491,17 @@ def compute_exact_match(
     }
 
 
-def make_compute_metrics(_pad_id: int):
+def make_compute_metrics(_pad_id: int, task: str = "task1"):
+    unordered = (task == "task2")
     def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
         logits, labels = eval_pred
         if isinstance(logits, tuple):
             logits = logits[0]
-        return compute_exact_match(np.argmax(logits, axis=-1), labels)
+        # Causal LM: logits at position i predict token at position i+1.
+        # Shift so predictions align with labels.
+        predictions = np.argmax(logits[:, :-1, :], axis=-1)
+        labels = labels[:, 1:]
+        return compute_exact_match(predictions, labels, unordered=unordered)
     return compute_metrics
 
 
@@ -538,7 +560,16 @@ def evaluate_autoregressive(
         # Exactly n tokens: pad if model stopped early, trim if it ran over
         generated = (generated + [pad_id] * n)[:n]
 
-        n_ok = sum(g == t for g, t in zip(generated, target_ids))
+        if dataset.task == "task2":
+            # Unordered multiset match for task2
+            remaining = list(target_ids)
+            n_ok = 0
+            for g in generated:
+                if g in remaining:
+                    remaining.remove(g)
+                    n_ok += 1
+        else:
+            n_ok = sum(g == t for g, t in zip(generated, target_ids))
         token_correct += n_ok
         token_total   += n
         seq_correct   += int(n_ok == n)
@@ -635,7 +666,7 @@ def run_single_experiment(
         train_dataset   = train_ds,
         eval_dataset    = eval_ds,
         data_collator   = collator,
-        compute_metrics = make_compute_metrics(pad_id),
+        compute_metrics = make_compute_metrics(pad_id, task=cfg.task),
     )
 
     trainer.train()
@@ -654,8 +685,9 @@ def run_single_experiment(
         task=cfg.task, parallel_mode=False, split="eval",
         is_pretrained=is_pretrained,
     )
-    ar_metrics = evaluate_autoregressive(model, ar_eval_ds, tokenizer, n, device)
-    results.update(ar_metrics)
+    if mode == "autoregressive":
+        ar_metrics = evaluate_autoregressive(model, ar_eval_ds, tokenizer, n, device)
+        results.update(ar_metrics)
 
     print(f"  Results: {results}")
 
@@ -782,7 +814,7 @@ def print_summary_table(df: pd.DataFrame) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Parallel Token Prediction Experiment")
-    parser.add_argument("--task",            choices=["task1", "task2", "both"], default="both")
+    parser.add_argument("--task",            choices=["task1", "task2", "both"], default="task1")
     parser.add_argument("--n_values",        type=int, nargs="+", default=[2, 4, 8, 16])
     parser.add_argument("--n_layers_values", type=int, nargs="+", default=[1, 2, 4])
     parser.add_argument("--n_heads",         type=int,   default=4)
@@ -797,10 +829,10 @@ def main() -> None:
     parser.add_argument("--modes",
                         choices=["parallel", "autoregressive", "both"], default="both",
                         help="Training mode: parallel-slot, autoregressive, or both")
-    parser.add_argument("--pretrained",      type=str, default=None,
+    parser.add_argument("--pretrained",      type=str, default="answerdotai/ModernBERT-large",
                         help="HuggingFace model ID (e.g. 'gpt2', 'gpt2-medium'). "
                              "When set, uses a pretrained model instead of training from scratch.")
-    parser.add_argument("--debug_samples",   type=int, default=5,
+    parser.add_argument("--debug_samples",   type=int, default=0,
                         help="Number of debug prediction examples to print (0 to disable)")
     args = parser.parse_args()
 
@@ -815,7 +847,7 @@ def main() -> None:
     if args.pretrained:
         # Pretrained mode: load model and tokenizer from HuggingFace
         pretrained_model, tokenizer = load_pretrained_model(args.pretrained, device)
-        vocab_words = build_wordnet_vocab(max_words=2000, pretrained_tokenizer=tokenizer)
+        vocab_words = build_wordnet_vocab(max_words=200000, pretrained_tokenizer=tokenizer)
         print(f"Vocab size (single-token words): {len(vocab_words)}")
 
         # Get actual layer count from the model config for sweep/plot compatibility
@@ -826,7 +858,7 @@ def main() -> None:
         print(f"[pretrained] Using actual layer count: {actual_layers}")
     else:
         # From-scratch mode: build custom tokenizer
-        vocab_words = build_wordnet_vocab(max_words=2000)
+        vocab_words = build_wordnet_vocab(max_words=200000)
         tokenizer   = build_tokenizer(vocab_words)
         print(f"Vocab size: {tokenizer.vocab_size}")
         n_layers_values = args.n_layers_values

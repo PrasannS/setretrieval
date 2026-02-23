@@ -29,11 +29,20 @@ LENGTHEN_PROMPT = (
     "\n\nDocument:\n{}"
 )
 
+LENGTHEN_PROMPT_V2 = (
+    "Rewrite the following document to be around 2 times longer. Expand on the "
+    "existing points with more explanation, examples, and context while staying faithful to the "
+    "original content. "
+    "Output ONLY the rewritten document text. Do not include any preamble, headers, meta-commentary, "
+    "or phrases like 'Here is the rewritten document'. Just start directly with the rewritten content."
+    "\n\nDocument:\n{}"
+)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Shorten or lengthen corpus documents via an API model.")
     parser.add_argument("--corpus_path", type=str, required=True, help="Path to HF dataset with 'text' column")
-    parser.add_argument("--mode", type=str, required=True, choices=["shorten", "lengthen"])
+    parser.add_argument("--mode", type=str, required=True, choices=["shorten", "lengthen", "lengthen2"])
     parser.add_argument("--output_path", type=str, required=True, help="Where to save the transformed dataset")
     parser.add_argument("--model", type=str, default="gemini-2.5-flash", choices=list(PRICING.keys()))
     parser.add_argument("--max_concurrent", type=int, default=100)
@@ -52,7 +61,8 @@ def main():
     print(f"Loaded corpus with {len(corpus)} documents")
 
     prompt_template = SHORTEN_PROMPT if args.mode == "shorten" else LENGTHEN_PROMPT
-
+    if args.mode == "lengthen2":
+        prompt_template = LENGTHEN_PROMPT_V2
     client = ParallelResponsesClient(max_concurrent=args.max_concurrent)
 
     texts = [row["text"] for row in corpus]

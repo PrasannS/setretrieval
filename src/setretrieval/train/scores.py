@@ -4,6 +4,59 @@ import torch
 from pylate.utils.tensor import convert_to_tensor
 from pylate.scores import colbert_scores, colbert_kd_scores
 
+
+def mod_colbert_scores_topk(
+    queries_embeddings: list | np.ndarray | torch.Tensor,
+    documents_embeddings: list | np.ndarray | torch.Tensor,
+    queries_mask: torch.Tensor = None,
+    documents_mask: torch.Tensor = None,
+    k: int = 2,
+    alpha: float = 1.0,
+) -> torch.Tensor:
+    scores = colbert_scores_topk(queries_embeddings, documents_embeddings, None, None, k, alpha)
+    return scores
+
+def colbert_scores_topk(
+    queries_embeddings: list | np.ndarray | torch.Tensor,
+    documents_embeddings: list | np.ndarray | torch.Tensor,
+    queries_mask: torch.Tensor = None,
+    documents_mask: torch.Tensor = None,
+    k: int = 2,
+    alpha: float = 1.0,
+) -> torch.Tensor:
+    queries_embeddings = convert_to_tensor(queries_embeddings)
+    documents_embeddings = convert_to_tensor(documents_embeddings)
+
+    scores = torch.einsum(
+        "ash,bth->abst",
+        queries_embeddings,
+        documents_embeddings,
+    )
+
+    if queries_mask is not None:
+        queries_mask = convert_to_tensor(queries_mask)
+        scores = scores * queries_mask.unsqueeze(1).unsqueeze(3)
+
+    if documents_mask is not None:
+        documents_mask = convert_to_tensor(documents_mask)
+        scores = scores * documents_mask.unsqueeze(0).unsqueeze(2)
+
+    # scores shape: (num_queries, num_docs, query_seq_len, doc_seq_len)
+    # For each query token, get the max similarity across document tokens
+    top_k_values = torch.topk(scores, k=k, dim=-1).values  # (a, b, s, k)
+
+    max_scores = top_k_values[..., 0]       # (a, b, s)
+    kth_scores = top_k_values[..., k - 1]   # (a, b, s)
+
+    adjusted_scores = max_scores + alpha * (max_scores - kth_scores)  # (a, b, s)
+
+    # Apply queries mask to zero out padding tokens before summing
+    if queries_mask is not None:
+        adjusted_scores = adjusted_scores * queries_mask.unsqueeze(1)
+
+    return adjusted_scores.sum(axis=-1)
+
+
 # get rid of the mask component, hmm TODO this could actually be causing problems...
 def mod_colbert_kd_scores(
     queries_embeddings: list | np.ndarray | torch.Tensor,

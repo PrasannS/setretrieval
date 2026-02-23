@@ -15,6 +15,25 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 
+import re
+
+import re
+
+def extract_all_vals(path: str):
+    # Match any of the four keys followed by digits,
+    # requiring a non-word boundary before them
+    pattern = r'\b(p?qv|p?dv)(\d+)'
+    
+    matches = re.findall(pattern, path)
+    
+    # Default values
+    result = {"qv": 0, "dv": 0, "pqv": 0, "pdv": 0}
+    
+    for key, value in matches:
+        result[key] = int(value)
+    
+    return result["qv"], result["dv"], result["pqv"], result["pdv"]
+
 class ColBERTModelMixin:
     """Mixin that provides ColBERT model loading, LoRA support, and multi-GPU embedding.
 
@@ -22,17 +41,23 @@ class ColBERTModelMixin:
     which provides `self.model_name`, `self.model`, `self.indices`, etc.
     """
 
+    
+
+    # get rid of manually needing to specify qvecs, dvecs, passiveqvecs, passivedvecs
     def _init_colbert_model(self, model_name, qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=128, usefast=True):
         """Initialize ColBERT model configuration. Call this in subclass __init__."""
         self.gpu_list = list(range(torch.cuda.device_count()))
         self.num_workers = len(self.gpu_list)
         self.qmodel = None
         self.qmod_name = qmod_name
-        self.qvecs = qvecs
-        self.dvecs = dvecs
+
+        qv, dv, pqv, pdv = extract_all_vals(model_name)
+        print(f"Extracted values: qv={qv}, dv={dv}, pqv={pqv}, pdv={pdv}")
+        self.qvecs = qv
+        self.dvecs = dv
         self.use_bsize = use_bsize
-        self.passiveqvecs = passiveqvecs
-        self.passivedvecs = passivedvecs
+        self.passiveqvecs = pqv
+        self.passivedvecs = pdv
         self.models = []
 
         # breakpoint()

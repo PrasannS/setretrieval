@@ -15,7 +15,8 @@ from sentence_transformers.training_args import BatchSamplers
 from pylate import models, utils, losses, evaluation
 import torch
 from setretrieval.train.pylate_monkeypatch import padded_tokenize, newforward, modadj_tokenize, mod_encode
-from setretrieval.train.scores import mod_colbert_scores, extend_vector_scores
+from setretrieval.train.scores import mod_colbert_scores, extend_vector_scores, mod_colbert_scores_topk, colbert_scores_topk
+from pylate.scores import colbert_scores
 
 def main(args):
     lr = args.lr
@@ -23,7 +24,7 @@ def main(args):
     model_shortname = model_name.split("/")[-1]
 
     if args.dataset == "reasonir":
-        document_length = 8192
+        document_length = 8192 # TODO this is unnecessary maybe?
         query_length = 128
     else:
         document_length = 2000
@@ -51,33 +52,49 @@ def main(args):
             split="train",
         )
         dataset_dict = dataset.train_test_split(test_size=1_000, seed=12)
-        debug = False
-        if debug:
-            train_dataset = dataset_dict["train"].select(range(10_000))
-        else:
-            train_dataset = dataset_dict["train"].select(range(1_250_000))
-
+        train_dataset = dataset_dict["train"].select(range(1_250_000))
         eval_dataset = dataset_dict["test"]
+
     elif args.dataset == "reasonir":
         dataset = DatasetDict.load_from_disk("propercache/data/colbert_training/reasonir_hq_formatted")
         train_dataset = dataset["train"]
         eval_dataset = dataset["test"]
 
     oldlen = len(train_dataset)
+
+    if args.debug: 
+        print("Debug mode: using 500 samples")
+        train_dataset = train_dataset.select(range(10000))
+        eval_dataset = eval_dataset.select(range(512))
+        
     train_dataset = train_dataset.filter(lambda x: len(x["query"]) < 8000)
     print("Old length: ", oldlen, "New length: ", len(train_dataset))
-    # 3. Define a loss function
+    
+    # 3. Define a loss function (TODO should be possible to clean this up)
     if args.qvecs != -1 and args.dvecs != -1:
         scmet = mod_colbert_scores if args.colscore == "maxsim" else extend_vector_scores
+        if args.topk > 1:
+            print(f"Using topk score metric with k={args.topk} and alpha={args.alpha}")
+            scmet = lambda a, b, **kwargs: mod_colbert_scores_topk(a, b, k=args.topk, alpha=args.alpha)
         print(f"Using {args.colscore} score metric")
         loss = losses.CachedContrastive(model, mini_batch_size=args.mini_batch_size, temperature=args.temperature, score_metric=scmet)  # Increase mini_batch_size if you have enough VRAM
     else:
+        # just use defaults in this case (need masking for normal stuff)
+        scmet = colbert_scores
+        if args.topk > 1:
+            print(f"Using topk score metric with k={args.topk} and alpha={args.alpha}")
+            scmet = lambda a, b, **kwargs: colbert_scores_topk(a, b, k=args.topk, alpha=args.alpha, **kwargs)
         loss = losses.CachedContrastive(model, mini_batch_size=args.mini_batch_size, temperature=args.temperature)  # Increase mini_batch_size if you have enough VRAM
+
+    
     run_name = f"{model_shortname}-pylate-pairwise-{args.dataset}-{lr}-qv{args.qvecs}-dv{args.dvecs}-pqv{args.passiveqvecs}-pdv{args.passivedvecs}-embsize{args.embdim}"
     if args.colscore != "maxsim":
         run_name += f"-{args.colscore}"
+    if args.topk > 1:
+        run_name += f"-topk{args.topk}-alpha{args.alpha}"
+
     # 4. (Optional) Specify training arguments
-    args = SentenceTransformerTrainingArguments(
+    targs = SentenceTransformerTrainingArguments(
         # Required parameter:
         output_dir=f"output/{model_shortname}/{run_name}",
         # Optional training parameters:
@@ -106,12 +123,12 @@ def main(args):
         negatives=eval_dataset["negative"],
         name="msmarco-co-condenser-dev",
     )
-    dev_evaluator(model)
+    # dev_evaluator(model)
 
     # 6. Create a trainer & train
     trainer = SentenceTransformerTrainer(
         model=model,
-        args=args,
+        args=targs,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         loss=loss,
@@ -120,12 +137,13 @@ def main(args):
     )
     trainer.train()
 
-    # 7. (Optional) Evaluate the trained model on the evaluator after training
-    dev_evaluator(model)
 
     # 8. Save the model
     model.save_pretrained(f"output/{model_shortname}/{run_name}/final")
 
+    # 7. (Optional) Evaluate the trained model on the evaluator after training
+    dev_evaluator(model)
+    
     # model.push_to_hub(run_name, private=False)
 
 if __name__ == "__main__":
@@ -145,6 +163,9 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--big_batch_size", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.05)
+    parser.add_argument("--topk", type=int, default=-1)
+    parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     if args.qvecs != -1 and args.dvecs != -1:
         print("Monkey patching ColBERT model")
