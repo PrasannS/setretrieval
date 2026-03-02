@@ -25,7 +25,7 @@ class ColBERTFaissTokenIndexer(ColBERTModelMixin, EasyIndexerBase):
 
     def __init__(self, model_name='nomic-ai/nomic-embed-text-v1',
                  index_base_path='propercache/cache/faiss_colbert_indices',
-                 qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=128, usefast=True):
+                 qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=32, usefast=True):
         self._init_colbert_model(model_name, qmod_name, qvecs, dvecs, passiveqvecs, passivedvecs, use_bsize, usefast)
         EasyIndexerBase.__init__(self, model_name, index_base_path, self.num_workers)
         self.token_to_doc_map = {}
@@ -242,11 +242,10 @@ class ColBERTMaxSimIndexer(ColBERTFaissTokenIndexer):
         # Re-embed changed documents
         changed_texts = [new_documents[i]['text'] for i in replace_inds]
 
-        new_embeds = self.model.encode(
+        new_embeds = self.embed_with_multi_gpu(
             changed_texts,
-            batch_size=32,
-            is_query=False,
-            show_progress_bar=True
+            qtype="document",
+            batch_size=32
         )
 
         #  Add new token vectors with NEW unique ids

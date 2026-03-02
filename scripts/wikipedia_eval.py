@@ -6,6 +6,7 @@ from setretrieval.indexers.colbert_faissindexer import TokenColBERTEasyIndexer
 from setretrieval.indexers.single_indexer import SingleEasyIndexer
 from setretrieval.indexers.simple_indexers import BM25EasyIndexer, RandomEasyIndexer
 from setretrieval.indexers.colbert_faissindexer import ColBERTMaxSimIndexer
+from setretrieval.indexers.multidoc_indexer import MultiDocIndexer
 import argparse
 from datasets import Dataset
 import os
@@ -14,7 +15,7 @@ from statistics import mean
 import json
 
 def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precision"):
-
+    # breakpoint()
     useddocs = [idxer.documents[idx_id][int(pred['index'])]['text'] for pred in predictions]
     useddocs = set(useddocs)
     truepositives = set(truepositives)
@@ -29,7 +30,7 @@ def indexer_eval_row(predictions, truepositives, idxer, idx_id, metric="precisio
     else:
         raise ValueError(f"Invalid metric: {metric}")
 
-def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, ebsize=128, usefast="yes", detailed_save="no"):
+def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, ebsize=128, usefast="yes", detailed_save="no", multn=2, multj=2, multgrouping="bm25"):
     if indextype == "bm25":
         indexer = BM25EasyIndexer()
     elif indextype == "colbert":
@@ -40,6 +41,9 @@ def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=Non
         indexer = TokenColBERTEasyIndexer(model_name=modelname,)
     elif indextype == "colbert_faiss":
         indexer = ColBERTMaxSimIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, use_bsize=ebsize, usefast=usefast, detailed_save=detailed_save)
+    elif indextype == "multicolbert":
+        base_indexer = ColBERTMaxSimIndexer(model_name=modelname, qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, use_bsize=ebsize, usefast=usefast, detailed_save=detailed_save)
+        indexer = MultiDocIndexer(base_indexer=base_indexer, n_per_chunk=multn, j_repeats=multj, grouping=multgrouping)
     elif indextype == "single":
         indexer = SingleEasyIndexer(model_name=modelname)
     elif indextype == "random": 
@@ -51,12 +55,12 @@ def ds_load_indexer(indextype, modelname, datasetpath, redo=False, qmod_name=Non
     index_id = indexer.index_dataset(datasetpath, redo=redo)
     return indexer, index_id
 
-def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no", qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, ebsize=128, usefast="yes", detailed_save="no"):
+def do_eval(indextype, modelname, datasetpath, evalsetpath, k, forceredo="no", qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, ebsize=128, usefast="yes", detailed_save="no", multn=2, multj=2, multgrouping="bm25"):
 
     eval_set = Dataset.load_from_disk(evalsetpath)
     eval_set = check_process_tset(eval_set)
 
-    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes", qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, ebsize=ebsize, usefast=usefast, detailed_save=detailed_save)
+    indexer, index_id = ds_load_indexer(indextype, modelname, datasetpath, redo=forceredo=="yes", qmod_name=qmod_name, qvecs=qvecs, dvecs=dvecs, passiveqvecs=passiveqvecs, passivedvecs=passivedvecs, ebsize=ebsize, usefast=usefast, detailed_save=detailed_save, multn=multn, multj=multj, multgrouping=multgrouping)
     # process all queries in one go (assume that all queries are searching over the same data, and that index has everything)
     results = indexer.search(list(eval_set["question"]), index_id, k)
 
@@ -83,8 +87,11 @@ if __name__ == "__main__":
     parser.add_argument("--colbert_dvecs", type=int, default=-1)
     parser.add_argument("--colbert_passiveqvecs", type=int, default=0)
     parser.add_argument("--colbert_passivedvecs", type=int, default=0)
-    parser.add_argument("--colbert_ebsize", type=int, default=128)
+    parser.add_argument("--colbert_ebsize", type=int, default=32)
     parser.add_argument("--colbert_usefast", type=str, default="yes")
+    parser.add_argument("--mult_n", type=int, default=2)
+    parser.add_argument("--mult_j", type=int, default=2)
+    parser.add_argument("--mult_grouping", type=str, default="bm25")
     args = parser.parse_args()
 
     print("starting eval")
@@ -94,6 +101,8 @@ if __name__ == "__main__":
     resultkey = args.eval_set_path.split("/")[-1]
     dsrep = args.dataset_path.replace("/", "_")
     methodkey = f"{args.index_type}-{args.model_name}-{args.k}-{dsrep}"
+    if args.index_type == "multicolbert":
+        methodkey += f"-{args.mult_n}-{args.mult_j}-{args.mult_grouping}"
     if args.qmod_name is not None:
         methodkey += f"-{args.qmod_name.replace('/', '_')}"
 
@@ -107,7 +116,7 @@ if __name__ == "__main__":
         print(f"Loading results from cache for {resultkey}")
         metres = metresults[methodkey]
     else:
-        metres, questions, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo, args.qmod_name, args.colbert_qvecs, args.colbert_dvecs, args.colbert_passiveqvecs, args.colbert_passivedvecs, args.colbert_ebsize, args.colbert_usefast, args.detailed_save)
+        metres, questions, preds, golds = do_eval(args.index_type, args.model_name, args.dataset_path, args.eval_set_path, args.k, args.forceredo, args.qmod_name, args.colbert_qvecs, args.colbert_dvecs, args.colbert_passiveqvecs, args.colbert_passivedvecs, args.colbert_ebsize, args.colbert_usefast, args.detailed_save, args.mult_n, args.mult_j, args.mult_grouping)
         metresults[methodkey] = metres
         pickdump(metresults, "propercache/cache/setresults/"+resultkey+".pkl")
         if len(args.save_preds) > 0:

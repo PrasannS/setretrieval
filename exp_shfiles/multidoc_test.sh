@@ -1,0 +1,9 @@
+# testing multi-doc performance
+
+# 100 model
+# python scripts/wikipedia_eval.py --index_type multicolbert --model_name output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv100-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 10 --save_preds paircolbnormalq1d100embsize128topk4alpha1.0 --colbert_qvecs 1 --colbert_dvecs 100 --colbert_passiveqvecs 0 --colbert_passivedvecs 0 --colbert_ebsize 128 --colbert_usefast yes --detailed_save no --mult_n 2 --mult_j 2 --mult_grouping bm25
+
+# 400 model
+# python scripts/wikipedia_eval.py --index_type multicolbert --model_name output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv400-pqv0-pdv0-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 10 --save_preds paircolbnormalq1d400embsize128topk4alpha1.0 --colbert_qvecs 1 --colbert_dvecs 400 --colbert_passiveqvecs 0 --colbert_passivedvecs 0 --colbert_ebsize 128 --colbert_usefast yes --detailed_save no --mult_n 2 --mult_j 2 --mult_grouping bm25
+
+python scripts/wikipedia_eval.py --index_type multicolbert --model_name output/ModernBERT-base/ModernBERT-base-pylate-pairwise-0.0003-qv1-dv400-pqv0-pdv0-embsize128/final --dataset_path propercache/data/datastores/fiqacorpus --eval_set_path propercache/data/evalsets/fiqa_testset --k 10 --save_preds paircolbnormalq1d400embsize128topk4alpha1.0 --colbert_qvecs 1 --colbert_dvecs 400 --colbert_passiveqvecs 0 --colbert_passivedvecs 0 --colbert_ebsize 128 --colbert_usefast yes --detailed_save no --mult_n 2 --mult_j 2 --mult_grouping random

@@ -7,8 +7,12 @@ script paraphrases either:
   - 'neg'  : corpus docs that are NOT positives for any query
   - 'all'  : every corpus doc
 
-It then builds a fresh ColBERT index on the modified corpus and reports recall,
-precision, and atleastone @ k.
+It then either:
+  (default) builds a fresh ColBERT index on the modified corpus and reports
+            recall, precision, and atleastone @ k.
+  (--use_multichunk) indexes both the original and paraphrase as separate
+            chunks per document via MultiChunkIndexer, so retrieving either
+            version counts as a hit.
 
 Usage:
     python scripts/paraphrase_robustness_eval.py \\
@@ -29,6 +33,7 @@ from statistics import mean
 from datasets import Dataset, load_from_disk
 
 from setretrieval.indexers.colbert_faissindexer import ColBERTMaxSimIndexer
+from setretrieval.indexers.multichunk_indexer import MultiChunkIndexer
 from setretrieval.inference.oai_request_client import ParallelResponsesClient, PRICING
 from setretrieval.utils.utils import check_process_tset
 
@@ -80,6 +85,8 @@ def eval_with_paraphrased_chunks(
     cache_dir="propercache/cache/paraphrase_eval",
     force_paraphrase=False,
     concat_original=False,
+    verbose=False,
+    use_multichunk=False,
 ):
     assert "{}" in paraphrase_prompt, "paraphrase_prompt must contain '{}' as the text placeholder"
     assert mode in ("pos", "neg", "all", "none"), "mode must be one of: pos, neg, all"
@@ -143,10 +150,9 @@ def eval_with_paraphrased_chunks(
         paraphrased = paraphrase_texts(texts_to_paraphrase, paraphrase_prompt, llm_model, max_concurrent, concat_original)
 
         print("Examples of before / after:")
-        for i in range(5): 
+        for i in range(5):
             print(f"Before: {texts_to_paraphrase[i]}")
-            print(f"After: {paraphrased[i]}")
-            print()
+            print(f"After: {paraphrased[i]}\n")
         new_texts = corpus_texts.copy()
         for idx, new_text in zip(sorted_indices, paraphrased):
             new_texts[idx] = new_text
@@ -156,18 +162,48 @@ def eval_with_paraphrased_chunks(
         modified_dataset.save_to_disk(modified_corpus_path)
         print(f"Saved modified corpus to {modified_corpus_path}")
 
-    # --- Build ColBERT index on the modified corpus --------------------------
-    indexer = ColBERTMaxSimIndexer(model_name=model_name)
-    index_id = indexer.index_dataset(corpus_path)
-    if modified_corpus_path != corpus_path:
-        indexer.smallupdate_index(index_id, modified_dataset, modified_corpus_path)
+    if use_multichunk:
+        # --- Multi-chunk path: index original + paraphrase as separate chunks ---
+        # Build index_id that encodes the paraphrase config
+        prompt_hash = hashlib.sha256(paraphrase_prompt.encode()).hexdigest()[:12]
+        mc_cache_key = f"{mode}_{llm_model.replace('/', '_')}_{prompt_hash}_mc"
+        mc_index_id = f"{corpus_path.replace('/', '_')}_{mc_cache_key}"
 
-    # TODO maybe want to clean up / debug how index re-usage works a little bit...
+        base_indexer = ColBERTMaxSimIndexer(model_name=model_name)
+        indexer = MultiChunkIndexer(base_indexer)
+
+        if not force_paraphrase and indexer.index_exists(mc_index_id):
+            print(f"Using cached multi-chunk index: {mc_index_id}")
+        else:
+            if mode == "none":
+                multichunk_docs = [[text] for text in corpus_texts]
+            else:
+                # paraphrased_map: original corpus index → paraphrased text
+                paraphrased_map = dict(zip(sorted_indices, paraphrased))
+                multichunk_docs = []
+                for i, text in enumerate(corpus_texts):
+                    if i in paraphrased_map:
+                        multichunk_docs.append([text, paraphrased_map[i]])
+                    else:
+                        multichunk_docs.append([text])
+            indexer.index_documents(multichunk_docs, mc_index_id)
+
+        questions = list(eval_set["question"])
+        results = indexer.search(questions, mc_index_id, k=k)
+
+    else:
+        # --- Original path: replace corpus docs and use smallupdate_index --------
+        indexer = ColBERTMaxSimIndexer(model_name=model_name)
+        index_id = indexer.index_dataset(corpus_path)
+        if modified_corpus_path != corpus_path:
+            indexer.smallupdate_index(index_id, modified_dataset, modified_corpus_path)
+
+        # TODO maybe want to clean up / debug how index re-usage works a little bit...
+
+        questions = list(eval_set["question"])
+        results = indexer.search(questions, index_id, k=k)
 
     # --- Retrieve and evaluate -----------------------------------------------
-    questions = list(eval_set["question"])
-    results = indexer.search(questions, index_id, k=k)
-
     # breakpoint()
     metres = {"precision": [], "recall": [], "atleastone": []}
     for preds, pos_idxs in zip(results, query_pos_indices):
@@ -180,6 +216,16 @@ def eval_with_paraphrased_chunks(
         # Recall denominator: min(n_pos, k) — can't retrieve more than k docs
         metres["recall"].append(len(intersection) / min(n_pos, k) if n_pos else 0.0)
         metres["atleastone"].append(1.0 if intersection else 0.0)
+
+    if verbose:
+        # Show worst-performing queries for debugging
+        query_details = sorted(
+            enumerate(zip(metres["atleastone"], query_pos_indices)),
+            key=lambda x: x[1][0]
+        )
+        print("\n--- Queries with atleastone=0 (failed retrievals) ---")
+        failed = [(i, pos_idxs) for i, (ao, pos_idxs) in query_details if ao == 0.0]
+        print(f"  {len(failed)} / {len(metres['atleastone'])} queries retrieved no positives")
 
     return metres
 
@@ -217,7 +263,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--k", type=int, default=10, help="Retrieval cutoff for recall/precision")
     parser.add_argument(
-        "--max_concurrent", type=int, default=100, help="Max parallel API requests"
+        "--max_concurrent", type=int, default=50, help="Max parallel API requests"
     )
     parser.add_argument("--colbert_qvecs", type=int, default=-1)
     parser.add_argument("--colbert_dvecs", type=int, default=-1)
@@ -233,9 +279,22 @@ if __name__ == "__main__":
         help="Redo paraphrasing even if a cached modified corpus exists",
     )
     parser.add_argument(
-        "--concat_original", 
+        "--concat_original",
         action="store_true",
         help="Concat the original corpus to the modified corpus",
+    )
+    parser.add_argument(
+        "--use_multichunk",
+        action="store_true",
+        help=(
+            "Instead of replacing corpus docs, index original and paraphrase as "
+            "separate chunks via MultiChunkIndexer (retrieving either counts as a hit)"
+        ),
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print per-query breakdown (failed retrievals etc.)",
     )
     args = parser.parse_args()
 
@@ -254,6 +313,8 @@ if __name__ == "__main__":
         cache_dir=args.cache_dir,
         force_paraphrase=args.force_paraphrase,
         concat_original=args.concat_original,
+        verbose=args.verbose,
+        use_multichunk=args.use_multichunk,
     )
 
     print(f"\n--- Results (k={args.k}, mode={args.mode}) ---")

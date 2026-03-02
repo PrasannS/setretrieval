@@ -19,20 +19,40 @@ import re
 
 import re
 
+
 def extract_all_vals(path: str):
-    # Match any of the four keys followed by digits,
-    # requiring a non-word boundary before them
-    pattern = r'\b(p?qv|p?dv)(\d+)'
-    
-    matches = re.findall(pattern, path)
-    
-    # Default values
-    result = {"qv": 0, "dv": 0, "pqv": 0, "pdv": 0}
-    
-    for key, value in matches:
+
+    # Integer parameters
+    int_pattern = r'\b(p?qv|p?dv)(\d+)'
+    int_matches = re.findall(int_pattern, path)
+
+    # Float parameters (allow integers or decimals)
+    float_pattern = r'\b(qratio|dratio)(\d+(?:\.\d+)?)'
+    float_matches = re.findall(float_pattern, path)
+
+    result = {
+        "qv": 0,
+        "dv": 0,
+        "pqv": 0,
+        "pdv": 0,
+        "qratio": 0.0,
+        "dratio": 0.0,
+    }
+
+    for key, value in int_matches:
         result[key] = int(value)
-    
-    return result["qv"], result["dv"], result["pqv"], result["pdv"]
+
+    for key, value in float_matches:
+        result[key] = float(value)
+
+    return (
+        result["qv"],
+        result["dv"],
+        result["pqv"],
+        result["pdv"],
+        result["qratio"],
+        result["dratio"],
+    )
 
 class ColBERTModelMixin:
     """Mixin that provides ColBERT model loading, LoRA support, and multi-GPU embedding.
@@ -40,8 +60,6 @@ class ColBERTModelMixin:
     Classes using this mixin must also inherit from EasyIndexerBase (or a subclass),
     which provides `self.model_name`, `self.model`, `self.indices`, etc.
     """
-
-    
 
     # get rid of manually needing to specify qvecs, dvecs, passiveqvecs, passivedvecs
     def _init_colbert_model(self, model_name, qmod_name=None, qvecs=-1, dvecs=-1, passiveqvecs=0, passivedvecs=0, use_bsize=128, usefast=True):
@@ -51,10 +69,12 @@ class ColBERTModelMixin:
         self.qmodel = None
         self.qmod_name = qmod_name
 
-        qv, dv, pqv, pdv = extract_all_vals(model_name)
-        print(f"Extracted values: qv={qv}, dv={dv}, pqv={pqv}, pdv={pdv}")
+        qv, dv, pqv, pdv, qratio, dratio = extract_all_vals(model_name)
+        print(f"Extracted values: qv={qv}, dv={dv}, pqv={pqv}, pdv={pdv}, qratio={qratio}, dratio={dratio}")
         self.qvecs = qv
         self.dvecs = dv
+        self.query_ratio = qratio
+        self.document_ratio = dratio
         self.use_bsize = use_bsize
         self.passiveqvecs = pqv
         self.passivedvecs = pdv
@@ -115,11 +135,13 @@ class ColBERTModelMixin:
             print("Loading adapter")
             mod.load_adapter(adapter_name)
 
-        if self.qvecs > -1 and self.dvecs > -1:
+        if self.qvecs > -1 or self.dvecs > -1 or self.query_ratio > 0 or self.document_ratio > 0:
             mod.tokenizer.query_vectors = self.qvecs
             mod.tokenizer.doc_vectors = self.dvecs
             mod.tokenizer.qpass_vecs = self.passiveqvecs
             mod.tokenizer.dpass_vecs = self.passivedvecs
+            mod.tokenizer.query_ratio = self.query_ratio
+            mod.tokenizer.document_ratio = self.document_ratio
 
         return mod
 

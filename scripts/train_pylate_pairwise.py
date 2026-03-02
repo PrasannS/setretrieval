@@ -29,6 +29,7 @@ def main(args):
     else:
         document_length = 2000
         query_length = 32
+    
     # 1. Load pylate model to finetune
     model = models.ColBERT(
         model_name_or_path=model_name, 
@@ -38,12 +39,16 @@ def main(args):
         query_length=query_length,
         skiplist_words=[],
     )
-    if args.qvecs != -1 and args.dvecs != -1:
-        model.tokenizer.query_vectors = args.qvecs
-        model.tokenizer.doc_vectors = args.dvecs
-        model.tokenizer.qpass_vecs = args.passiveqvecs
-        model.tokenizer.dpass_vecs = args.passivedvecs
 
+    model.tokenizer.query_vectors = args.qvecs
+    model.tokenizer.doc_vectors = args.dvecs
+    model.tokenizer.qpass_vecs = args.passiveqvecs
+    model.tokenizer.dpass_vecs = args.passivedvecs
+
+    model.tokenizer.query_ratio = args.qratio
+    model.tokenizer.document_ratio = args.dratio
+
+    # breakpoint()
     # 2. Load a dataset to finetune on
     if args.dataset == "msmarco":
         dataset = load_dataset(
@@ -92,6 +97,8 @@ def main(args):
         run_name += f"-{args.colscore}"
     if args.topk > 1:
         run_name += f"-topk{args.topk}-alpha{args.alpha}"
+    if args.qratio != 0 or args.dratio != 0:
+        run_name += f"-qratio{args.qratio}-dratio{args.dratio}"
 
     # 4. (Optional) Specify training arguments
     targs = SentenceTransformerTrainingArguments(
@@ -166,8 +173,10 @@ if __name__ == "__main__":
     parser.add_argument("--topk", type=int, default=-1)
     parser.add_argument("--alpha", type=float, default=1.0)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--qratio", type=float, default=0)
+    parser.add_argument("--dratio", type=float, default=0)
     args = parser.parse_args()
-    if args.qvecs != -1 and args.dvecs != -1:
+    if args.qvecs != -1 or args.dvecs != -1 or args.qratio > 0 or args.dratio > 0:
         print("Monkey patching ColBERT model")
         # do necessary monkey patching
         models.ColBERT.tokenize = padded_tokenize

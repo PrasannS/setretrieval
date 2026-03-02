@@ -23,130 +23,171 @@ logger = logging.getLogger(__name__)
 # given normal output with vector shape [B, T, D], zero out all vectors that aren't in the first token for each item in batch
 def newforward(self, input: dict[str, Tensor], **kwargs) -> dict[str, Tensor]:
     outs = self.old_forward(input, **kwargs)
-    if self._first_module().tokenizer.query_vectors > 0:
+    # breakpoint()
+    if self._first_module().tokenizer.query_vectors > 0 or self._first_module().tokenizer.query_ratio > 0:
         mask = (input["input_ids"] == self._first_module().tokenizer.cls_token_id) & (input["attention_mask"] == 1)  # Shape: [batch_size, seq_len]
         # ignore cls token
         mask[:, 0] = False
-        # breakpoint()
-        # only select token_embeddings from outs that are masked
-        outs['token_embeddings'] = outs['token_embeddings'][mask].view(outs['token_embeddings'].size(0), -1, outs['token_embeddings'].size(-1))
-    # print(outs['token_embeddings'].shape)
+        
+        # get mask sums for each item in batch, if all items have the same length, then use view, otherwise just multiply 
+        # embeddings with mask
+        msums = mask.sum(dim=-1)
+        
+        if self._first_module().tokenizer.query_vectors > 0 and self._first_module().tokenizer.doc_vectors > 0:
+            assert msums.unique().numel() == 1, "Batch has multiple lengths for query and document vectors"
+
+        if msums.unique().numel() == 1:
+            outs['token_embeddings'] = outs['token_embeddings'] = outs['token_embeddings'][mask].view(outs['token_embeddings'].size(0), -1, outs['token_embeddings'].size(-1))
+        else:
+            # breakpoint()
+            # this is for the ratio case
+            outs['token_embeddings'] = outs['token_embeddings'] * mask.unsqueeze(-1)
+            # if train is False, then return a list of list of vectors (excluding zero vectors)
+            if not self._first_module().training:
+                embsfull = []
+                for i, emb in enumerate(outs['token_embeddings']):
+                    embstmp = []
+                    for j, embj in enumerate(emb):
+                        if mask[i, j]:
+                            embstmp.append(embj)
+                    embsfull.append(torch.stack(embstmp))
+                # breakpoint()
+                outs['token_embeddings'] = embsfull
+    
     return outs
 
-# use to monkey patch ColBERT to tokenize with pad tokens
-# cases to handle
-# 1. default, in which case this function shouldn't get called
-# 2. pad, in which case we add pad tokens and only these are used
-# 3. pad + passive, in which case we add passive vectors, then pad tokens (only these are used for vectors)
-# 4. default + passive, we add passive tokens. Both these and the pad tokens are used for vectors
+
 def padded_tokenize(
-        self,
-        texts: list[str] | list[dict] | list[tuple[str, str]],
-        is_query: bool = True,
-        pad: bool = False,
-    ) -> dict[str, torch.Tensor]:
-        """
-        Tokenizes the input texts.
+    self,
+    texts: list[str] | list[dict] | list[tuple[str, str]],
+    is_query: bool = True,
+    pad: bool = False,
+) -> dict[str, torch.Tensor]:
+    """
+    Tokenizes the input texts with optional static or ratio-based
+    embedding token augmentation.
 
-        Args:
-            texts (Union[list[str], list[dict], list[tuple[str, str]]]): A list of texts to be tokenized.
-            is_query (bool): Flag to indicate if the texts are queries. Defaults to True.
-            pad (bool): Flag to indicate if elements should be padded to max length. Defaults to False.
+    If ratio is provided (>=0), roughly ratio * original_token_count
+    embedding tokens are appended per example.
+    """
 
-        Returns:
-            dict[str, torch.Tensor]: A dictionary of tensors with the tokenized texts, including "input_ids",
-                "attention_mask", and optionally "token_type_ids".
-        """
-        # Set max sequence length based on whether the input is a query or document
-        # max_length = self.query_length if is_query else self.document_length
-        # # TODO this should be tokenizer max length
-        if self._first_module().max_seq_length in [512, 8192, 32768]: # this is to handle weirdness from prefix token
-            self._first_module().max_seq_length = self._first_module().max_seq_length - 1
-        
-        # print(f"WARNING: HARD-CODED MAX SEQ LENGTH TO 511")
-        # HACK ok I think this was usually padding to max length which was killing memory for qwen I'm assuming
-        # need to fix this up a bit
-        if "||||" in texts[0]:
+    if self._first_module().max_seq_length in [512, 8192, 32768]:
+        self._first_module().max_seq_length -= 1
 
-            # for the set case (to circumvent annoying dataloader stuff)
-            spltexts = [text.split("||||") for text in texts]
-            texts = [item for sublist in spltexts for item in sublist]
+    if "||||" in texts[0]:
+        spltexts = [text.split("||||") for text in texts]
+        texts = [item for sublist in spltexts for item in sublist]
 
-        # breakpoint()
-        if self._first_module().tokenizer.cls_token is None:
-            cls_token = '[EMB]'
-            # breakpoint()
-            # check if [EMB] is in added tokens
-            if self._first_module().tokenizer.convert_tokens_to_ids(cls_token) is None:
-                # in this case, add a special '[CLS]' token to the tokenizer, set it to be the cls_token_id
-                self._first_module().tokenizer.cls_token_id = self._first_module().tokenizer.add_tokens(cls_token)
-                self._first_module().tokenizer.cls_token = cls_token
-                self._first_module().auto_model.resize_token_embeddings(len(self._first_module().tokenizer))
-            else:
-                self._first_module().tokenizer.cls_token_id = self._first_module().tokenizer.convert_tokens_to_ids(cls_token)
-                self._first_module().tokenizer.cls_token = cls_token
+    if self._first_module().tokenizer.cls_token is None:
+        cls_token = "[EMB]"
+        tok = self._first_module().tokenizer
+        if tok.convert_tokens_to_ids(cls_token) is None:
+            tok.cls_token_id = tok.add_tokens(cls_token)
+            tok.cls_token = cls_token
+            self._first_module().auto_model.resize_token_embeddings(len(tok))
+        else:
+            tok.cls_token_id = tok.convert_tokens_to_ids(cls_token)
+            tok.cls_token = cls_token
 
-        # breakpoint()
-        addvecs = self._first_module().tokenizer.query_vectors if is_query else self._first_module().tokenizer.doc_vectors
-        passivevecs = self._first_module().tokenizer.qpass_vecs if is_query else self._first_module().tokenizer.dpass_vecs
+    tok = self._first_module().tokenizer
 
-        if type(texts[0]) == dict:
-            texts = [text['text'] for text in texts]
+    static_addvecs = tok.query_vectors if is_query else tok.doc_vectors
+    passivevecs = tok.qpass_vecs if is_query else tok.dpass_vecs
 
-        # filter stuff longer than 10k chars
-        overcnt = sum([len(text) > 10000 for text in texts])
-        if overcnt > 0:
-            # print([len(text) for text in texts])
-            # breakpoint()
-            print(f"WARNING: {overcnt} texts were longer than 10k chars, filtering them out")
-            texts = [text[:10000] for text in texts]
-        
+    ratio = tok.query_ratio if is_query else tok.document_ratio
+    if ratio is not None and ratio < 0:
+        raise ValueError("Ratio must be >= 0")
 
-        # breakpoint()
-        if passivevecs > 0:
-            # add passive vectors to the end of the text, these should just allow for more computation
-            texts = [text + " *" * passivevecs for text in texts]
-        
-        # breakpoint()
+    if isinstance(texts[0], dict):
+        texts = [text["text"] for text in texts]
 
-        # breakpoint()
+    overcnt = sum(len(text) > 10000 for text in texts)
+    if overcnt > 0:
+        print(f"WARNING: {overcnt} texts were longer than 10k chars, truncating")
+        texts = [text[:10000] for text in texts]
 
-        if addvecs > 0:
-            ct = self._first_module().tokenizer.cls_token
-            ct = ct if ct == "[EMB]" else " "+ct
-            texts = [text + ct * addvecs for text in texts]
+    if passivevecs > 0:
+        texts = [text + " *" * passivevecs for text in texts]
 
-        # Tokenize the texts, let's generally not pad to max length here
-        tokenized_outputs = self._first_module().tokenize(texts, padding="longest")
+    # ---------------------------------------------------
+    # FIRST TOKENIZATION (to determine dynamic lengths)
+    # ---------------------------------------------------
 
-        tokenized_outputs['input_ids'] = tokenized_outputs['input_ids'][:, :self._first_module().max_seq_length]
-        tokenized_outputs['attention_mask'] = tokenized_outputs['attention_mask'][:, :self._first_module().max_seq_length]
-        if "token_type_ids" in tokenized_outputs:
-            tokenized_outputs['token_type_ids'] = tokenized_outputs['token_type_ids'][:, :self._first_module().max_seq_length]
+    if ratio is not None and ratio > 0:
+        base_tokenized = self.tokenizer(texts)
+        base_lengths = torch.tensor([len(tokens) for tokens in base_tokenized['input_ids']])
 
-        # in rows that contain no padding, then replace last addvecs tokens with cls_tokens 
-        if "bert-large-uncased" in self.tokenizer.name_or_path:
-            nprows = [row[-1] != self._first_module().tokenizer.pad_token_id and row[-1] != self._first_module().tokenizer.sep_token_id for row in tokenized_outputs['input_ids']]
-            for i in range(len(nprows)):
-                if nprows[i]:
-                    tokenized_outputs['input_ids'][i, -addvecs:] = self._first_module().tokenizer.cls_token_id
-            if sum(nprows) > 0:
-                print(f"{sum(nprows)} rows were truncated, adjusted their cls tokens")
+        # compute per-example add counts
+        dynamic_addvecs = torch.round(base_lengths.float() * ratio).long()
 
-        # Determine prefix ID based on input type
-        prefix_id = self.query_prefix_id if is_query else self.document_prefix_id
+    else:
+        dynamic_addvecs = None
 
-        # add prefix id to every tokenized tensor in tokenized_outputs
-        tokenized_outputs['input_ids'] = self.insert_prefix_token(tokenized_outputs['input_ids'], prefix_id)
-        tokenized_outputs['attention_mask'] = self.insert_prefix_token(tokenized_outputs['attention_mask'], 1)
+    # ---------------------------------------------------
+    # ADD EMBEDDING TOKENS
+    # ---------------------------------------------------
+    ct = tok.cls_token
+    ct = ct if ct == "[EMB]" else " " + ct
 
-        # Update token type IDs if they exist
-        if "token_type_ids" in tokenized_outputs:
-            tokenized_outputs["token_type_ids"] = self.insert_prefix_token(tokenized_outputs['token_type_ids'], 0)
+    new_texts = []
+    for i, text in enumerate(texts):
+        if dynamic_addvecs is not None:
+            add_count = int(dynamic_addvecs[i].item())
+        else:
+            add_count = static_addvecs
 
-        # use this in loss function when needed
-        # tokenized_outputs['splitquant'] = torch.tensor(splitquant)
-        return tokenized_outputs
+        if add_count > 0:
+            text = text + ct * add_count
+        new_texts.append(text)
+
+    texts = new_texts
+
+    # ---------------------------------------------------
+    # FINAL TOKENIZATION
+    # ---------------------------------------------------
+    tokenized_outputs = self._first_module().tokenize(texts, padding="longest")
+
+    max_len = self._first_module().max_seq_length
+    tokenized_outputs["input_ids"] = tokenized_outputs["input_ids"][:, :max_len]
+    tokenized_outputs["attention_mask"] = tokenized_outputs["attention_mask"][:, :max_len]
+
+    if "token_type_ids" in tokenized_outputs:
+        tokenized_outputs["token_type_ids"] = tokenized_outputs["token_type_ids"][:, :max_len]
+
+    # Handle truncated rows for static case (kept original behavior)
+    if (
+        dynamic_addvecs is None
+        and static_addvecs > 0
+        and "bert-large-uncased" in self.tokenizer.name_or_path
+    ):
+        nprows = [
+            row[-1] != tok.pad_token_id and row[-1] != tok.sep_token_id
+            for row in tokenized_outputs["input_ids"]
+        ]
+        for i in range(len(nprows)):
+            if nprows[i]:
+                tokenized_outputs["input_ids"][i, -static_addvecs:] = tok.cls_token_id
+        if sum(nprows) > 0:
+            print(f"{sum(nprows)} rows were truncated, adjusted cls tokens")
+
+    # ---------------------------------------------------
+    # PREFIX INSERTION
+    # ---------------------------------------------------
+    prefix_id = self.query_prefix_id if is_query else self.document_prefix_id
+
+    tokenized_outputs["input_ids"] = self.insert_prefix_token(
+        tokenized_outputs["input_ids"], prefix_id
+    )
+    tokenized_outputs["attention_mask"] = self.insert_prefix_token(
+        tokenized_outputs["attention_mask"], 1
+    )
+
+    if "token_type_ids" in tokenized_outputs:
+        tokenized_outputs["token_type_ids"] = self.insert_prefix_token(
+            tokenized_outputs["token_type_ids"], 0
+        )
+
+    return tokenized_outputs
 
 # for model-specific monkey patching
 def modadj_tokenize(self, texts: list[str] | list[dict] | list[tuple[str, str]], is_query: bool = True, pad: bool = False) -> dict[str, torch.Tensor]:
@@ -157,22 +198,6 @@ def modadj_tokenize(self, texts: list[str] | list[dict] | list[tuple[str, str]],
         tokenized_outputs['input_ids'][:, 0] = tokenized_outputs['input_ids'][:, 1].clone()
         tokenized_outputs['input_ids'][:, 1] = tmp
     return tokenized_outputs
-
-# def mod_encode(self, sentences: str | list[str], prompt_name: str | None = None, prompt: str | None = None, batch_size: int = 32, show_progress_bar: bool = None, precision: Literal["float32", "int8", "uint8", "binary", "ubinary"] = "float32", convert_to_numpy: bool = True, convert_to_tensor: bool = False, padding: bool = False, device: str = None, normalize_embeddings: bool = True, is_query: bool = True, pool_factor: int = 1, protected_tokens: int = 1) -> list[torch.Tensor] | ndarray | torch.Tensor:
-#     embeddings = self.old_encode(sentences, prompt_name, prompt, batch_size, show_progress_bar, precision, convert_to_numpy, convert_to_tensor, padding, device, normalize_embeddings, is_query, pool_factor, protected_tokens)
-#     # identify tokens with zero vectors and get rid of them to get a new list of vectors for each item
-#     new_embeddings = []
-#     for embedding in embeddings:
-#         temb = torch.tensor(embedding)
-#         # identify tokens with zero vectors (all numbers in last dimension are zeros)
-#         zero_mask = temb.abs().sum(dim=-1) == 0
-#         # breakpoint()
-#         # get rid of them
-#         temb = temb[~zero_mask]
-#         new_embeddings.append(temb)
-#     # breakpoint()
-#     print(f"Embedding count: {len(new_embeddings[0])}")
-#     return new_embeddings
 
 def mod_encode(
         self,

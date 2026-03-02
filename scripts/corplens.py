@@ -1,17 +1,42 @@
 # print out average number of characters, average number of modernbert tokens per document in 
 # normal, long, short fiqa corpora
 
-from datasets import Dataset
+from datasets import Dataset, load_from_disk, load_dataset
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from statistics import mean
+import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     toker = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
-    normal_corpus = Dataset.load_from_disk("propercache/data/datastores/fiqacorpus")
-    long_corpus = Dataset.load_from_disk("propercache/data/datastores/fiqacorpus_longv2")
-    short_corpus = Dataset.load_from_disk("propercache/data/datastores/fiqacorpus_short")
+    normal_corpus = load_from_disk("propercache/data/datastores/fiqacorpus")
+    long_corpus = load_from_disk("propercache/data/datastores/fiqacorpus_longv2")
+    short_corpus = load_from_disk("propercache/data/datastores/fiqacorpus_short")
 
+    nq_corpus = load_from_disk("propercache/data/datastores/nqcorpus_bm25")
+
+    dataset = load_dataset(
+        "sentence-transformers/msmarco-co-condenser-margin-mse-sym-mnrl-mean-v1",
+        "triplet-hard",
+        split="train",
+    )
+    dataset_dict = dataset.train_test_split(test_size=1_000, seed=12)
+    train_dataset = dataset_dict["train"].select(range(10000))
+
+    td_toks = [toker.encode(doc["positive"]) for doc in tqdm(train_dataset)]
+
+    fiqa_toks = [toker.encode(doc["text"]) for doc in tqdm(normal_corpus.select(range(10000)))]
+    nq_toks = [toker.encode(doc["text"]) for doc in tqdm(nq_corpus.select(range(10000)))]
+    # show histogram of token length of train, fiqa, nq, save to png
+    plt.hist([len(toks) for toks in td_toks], bins=100, label="train", color="blue", alpha=0.5)
+    plt.hist([len(toks) for toks in fiqa_toks], bins=100, label="fiqa", color="green", alpha=0.5)
+    plt.hist([len(toks) for toks in nq_toks], bins=100, label="nq", color="red", alpha=0.5)
+    plt.legend()
+    plt.savefig("token_length_hist.png")
+    plt.close()
+
+    #     mean([len(toks) for toks in td_toks])
+    breakpoint()
     normal_chars = [len(doc["text"]) for doc in tqdm(normal_corpus)]
     long_chars = [len(doc["text"]) for doc in tqdm(long_corpus)]
     short_chars = [len(doc["text"]) for doc in tqdm(short_corpus)]

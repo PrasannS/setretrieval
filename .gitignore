@@ -19,6 +19,7 @@ data/
 .Python
 build/
 develop-eggs/
+figures/
 dist/
 downloads/
 eggs/
